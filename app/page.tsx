@@ -1,10 +1,8 @@
 import { LockKeyhole } from "lucide-react";
 import { demoMode, getConfig } from "../lib/config";
-import { loadBoard } from "../lib/data";
-import { currentMember } from "../lib/session";
-import { login } from "./actions";
+import { householdDate, loadBoard } from "../lib/data";
+import { currentMember, memberInvite } from "../lib/session";
 import { Board, Brand, Unavailable, type Section } from "./board";
-import { ActionForm, Submit } from "./forms";
 
 export const dynamic = "force-dynamic";
 
@@ -17,15 +15,10 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ s
       <Brand />
       <span className="auth-symbol"><LockKeyhole size={26} /></span>
       <h1>Welcome home</h1>
-      <p>Use your personal access key to sign in to the household board.</p>
-      <ActionForm action={login} className="entry-form">
-        <label>Access key<input name="key" type="password" autoComplete="current-password" maxLength={256} required /></label>
-        <Submit>Sign in</Submit>
-      </ActionForm>
+      <p>Open your personal household link to see groceries, chores and schedules.</p>
       {demoMode && <div className="demo-access"><h2>Try a demo profile</h2>
-        {config.members.map((person) => <ActionForm key={person.id} action={login}>
-          <input type="hidden" name="key" value={person.key} /><Submit variant="secondary">{person.name}</Submit>
-        </ActionForm>)}
+        {config.members.map((person) => <a className="button secondary" key={person.id}
+          href={`/join#${memberInvite(person.id, config.secret)}`}>{person.name}</a>)}
       </div>}
     </div>
   </main>;
@@ -38,9 +31,8 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ s
   });
   if (!data) return <Unavailable />;
 
-  const [groceries, chores, schedule] = data;
-  const date = new Intl.DateTimeFormat("en-CA", { timeZone: config.timeZone, year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date());
-  return <Board section={active} data={{ groceries, chores, schedule }} member={member}
+  const date = householdDate(config.timeZone);
+  return <Board section={active} data={data} member={member}
     people={config.members.map(({ id, name }) => ({ id, name }))}
     date={date} currency={config.currency} timeZone={config.timeZone} demo={demoMode} />;
 }

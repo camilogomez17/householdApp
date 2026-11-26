@@ -183,3 +183,18 @@ summary::-webkit-details-marker { display: none; }
   .brand-icon { width: 33px; height: 33px; }
   .avatar { display: none; }
 }
+
+.family-card { width: min(100%, 520px); }
+.family-card h1 { margin-top: 12px; }
+.share-list { padding: 0; list-style: none; margin-block: 6px; border-top: 1px solid var(--line); }
+.share-list li { padding-block: 10px; border-bottom: 1px solid var(--line); }
+.share-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.share-row strong { overflow-wrap: anywhere; }
+.share-row button { flex-shrink: 0; }
+.share-list p, .share-note { font-size: .86rem; margin-top: 5px; }
+.share-fallback { display: grid; gap: 4px; font-size: .9rem; margin-top: 6px; }
+.share-fallback input { min-width: 0; padding: 7px 9px; border: 1px solid var(--line); border-radius: 6px; }
+
+@media (max-width: 850px) {
+  .sidebar nav .family-link { grid-column: 1 / -1; font-size: .85rem; }
+}

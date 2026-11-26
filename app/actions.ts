@@ -5,17 +5,16 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { z } from "zod";
 import { getConfig } from "../lib/config";
-import { query } from "../lib/data";
+import { householdDate, updateData } from "../lib/data";
 import { currentMember, signIn, signOut } from "../lib/session";
 
 export type FormResult = { error?: string; saved?: boolean };
 
-export async function login(_: FormResult, form: FormData): Promise<FormResult> {
-  const key = form.get("key");
-  if (typeof key !== "string" || !(await signIn(key.trim()))) {
-    return { error: "That access key didn’t match a household member." };
+export async function acceptInvite(token: string) {
+  if (typeof token !== "string" || !(await signIn(token))) {
+    return { error: "This link no longer works. Ask for a new household link." };
   }
-  redirect("/");
+  return { saved: true };
 }
 
 export async function logout() {
@@ -55,75 +54,84 @@ export async function updateBoard(_: FormResult, form: FormData): Promise<FormRe
     (member.manager && (!assigneeId || config.members.some((person) => person.id === assigneeId)))
     || assigneeId === member.id;
   const restricted = { error: "You don’t have permission to make that change." };
-  let changed: unknown[];
   try {
-    switch (input.intent) {
-      case "grocery-add":
-        changed = await query(`INSERT INTO groceries (id, name, quantity, status)
-          VALUES ($1, $2, $3, $4) ON CONFLICT (lower(name)) DO NOTHING RETURNING id`,
-        [randomUUID(), input.name, input.quantity, input.status]);
-        if (!changed.length) return { error: "That grocery is already on the board." };
-        break;
-      case "grocery-edit":
-        changed = await query(`UPDATE groceries SET quantity=$1, status=$2,
-          claimed_by=CASE WHEN $2='buy' THEN claimed_by ELSE NULL END WHERE id=$3 RETURNING id`,
-        [input.quantity, input.status, input.id]);
-        break;
-      case "grocery-claim":
-        changed = await query(`UPDATE groceries SET claimed_by=$1 WHERE id=$2
-          AND status='buy' AND claimed_by IS NULL RETURNING id`, [member.id, input.id]);
-        if (!changed.length) return { error: "That item has already been claimed or moved." };
-        break;
-      case "grocery-release":
-        changed = await query("UPDATE groceries SET claimed_by=NULL WHERE id=$1 AND claimed_by=$2 RETURNING id",
-          [input.id, member.id]);
-        break;
-      case "grocery-delete":
-        changed = await query("DELETE FROM groceries WHERE id=$1 AND status='remove' RETURNING id", [input.id]);
-        break;
-      case "chore-add":
-        if ((!member.manager && input.reward > 0) || (input.assignee && !canAssign(input.assignee))) return restricted;
-        changed = await query(`INSERT INTO chores (id, name, assignee, reward_cents, due_on)
-          VALUES ($1, $2, $3, $4, $5) RETURNING id`,
-        [randomUUID(), input.name, input.assignee || null, input.reward, input.due || null]);
-        break;
-      case "chore-assign":
-        if (!canAssign(input.assignee)) return restricted;
-        changed = await query(`UPDATE chores SET assignee=$1 WHERE id=$2 AND status='open'
-          AND ($3=1 OR assignee IS NULL) RETURNING id`, [input.assignee || null, input.id, Number(member.manager)]);
-        break;
-      case "chore-done":
-      case "chore-reopen":
-        changed = await query(`UPDATE chores SET status=$1 WHERE id=$2 AND status=$3
-          AND assignee IS NOT NULL AND (assignee=$4 OR $5=1) RETURNING id`,
-        [input.intent === "chore-done" ? "done" : "open", input.id,
-          input.intent === "chore-done" ? "open" : "done", member.id, Number(member.manager)]);
-        break;
-      case "chore-paid":
-        if (!member.manager) return restricted;
-        changed = await query(`UPDATE chores SET status='paid', paid_at=now(), paid_by=$1
-          WHERE id=$2 AND status='done' AND reward_cents > 0 RETURNING id`, [member.id, input.id]);
-        break;
-      case "chore-delete":
-        if (!member.manager) return restricted;
-        changed = await query("DELETE FROM chores WHERE id=$1 AND status='open' RETURNING id", [input.id]);
-        break;
-      case "schedule-add":
-        if (input.ends <= input.starts) return { error: "End time must be after start time." };
-        changed = await query(`INSERT INTO schedule (id, member_id, status, starts_at, ends_at, note)
-          VALUES ($1, $2, $3, $4, $5, $6) RETURNING id`,
-        [randomUUID(), member.id, input.status, input.starts, input.ends, input.note]);
-        break;
-      case "schedule-delete":
-        changed = await query("DELETE FROM schedule WHERE id=$1 AND member_id=$2 RETURNING id", [input.id, member.id]);
-        break;
-    }
+    const error = await updateData(config.timeZone, (board) => {
+      const grocery = "id" in input ? board.groceries.find((item) => item.id === input.id) : undefined;
+      const chore = "id" in input ? board.chores.find((item) => item.id === input.id) : undefined;
+      const stale = "This entry changed. Refresh the board and try again.";
+      switch (input.intent) {
+        case "grocery-add":
+          if (board.groceries.some((item) => item.name.toLowerCase() === input.name.toLowerCase())) {
+            return "That grocery is already on the board.";
+          }
+          board.groceries.unshift({ id: randomUUID(), name: input.name, quantity: input.quantity,
+            status: input.status, claimed_by: null });
+          break;
+        case "grocery-edit":
+          if (!grocery) return stale;
+          grocery.quantity = input.quantity;
+          grocery.status = input.status;
+          if (input.status !== "buy") grocery.claimed_by = null;
+          break;
+        case "grocery-claim":
+          if (!grocery || grocery.status !== "buy" || grocery.claimed_by) {
+            return "That item has already been claimed or moved.";
+          }
+          grocery.claimed_by = member.id;
+          break;
+        case "grocery-release":
+          if (grocery?.claimed_by !== member.id) return stale;
+          grocery.claimed_by = null;
+          break;
+        case "grocery-delete":
+          if (grocery?.status !== "remove") return stale;
+          board.groceries = board.groceries.filter((item) => item.id !== input.id);
+          break;
+        case "chore-add":
+          if ((!member.manager && input.reward > 0) || (input.assignee && !canAssign(input.assignee))) return restricted.error;
+          board.chores.unshift({ id: randomUUID(), name: input.name, assignee: input.assignee || null,
+            reward_cents: input.reward, due_on: input.due || null, status: "open", paid_by: null, paid_on: null });
+          break;
+        case "chore-assign":
+          if (!canAssign(input.assignee)) return restricted.error;
+          if (chore?.status !== "open" || (!member.manager && chore.assignee)) return stale;
+          chore.assignee = input.assignee || null;
+          break;
+        case "chore-done":
+        case "chore-reopen":
+          if (!chore?.assignee || (!member.manager && chore.assignee !== member.id)
+            || chore.status !== (input.intent === "chore-done" ? "open" : "done")) return stale;
+          chore.status = input.intent === "chore-done" ? "done" : "open";
+          break;
+        case "chore-paid":
+          if (!member.manager) return restricted.error;
+          if (chore?.status !== "done" || !chore.reward_cents) return stale;
+          chore.status = "paid";
+          chore.paid_by = member.id;
+          chore.paid_on = householdDate(config.timeZone);
+          break;
+        case "chore-delete":
+          if (!member.manager) return restricted.error;
+          if (chore?.status !== "open") return stale;
+          board.chores = board.chores.filter((item) => item.id !== input.id);
+          break;
+        case "schedule-add":
+          if (input.ends <= input.starts) return "End time must be after start time.";
+          board.schedule.push({ id: randomUUID(), member_id: member.id,
+            status: input.status, starts_at: input.starts, ends_at: input.ends, note: input.note });
+          break;
+        case "schedule-delete":
+          if (!board.schedule.some((entry) => entry.id === input.id && entry.member_id === member.id)) return stale;
+          board.schedule = board.schedule.filter((entry) => entry.id !== input.id);
+          break;
+      }
+    });
+    if (error) return { error };
   } catch (error) {
     console.error("Household update failed", input.intent, error instanceof Error ? error.name : "");
     return { error: "Couldn’t save the change. Try again in a moment." };
   }
 
-  if (!changed.length) return { error: "This entry changed. Refresh the board and try again." };
   revalidatePath("/");
   return { saved: true };
 }

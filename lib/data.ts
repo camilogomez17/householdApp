@@ -1,55 +1,7 @@
-import { neon } from "@neondatabase/serverless";
-import type { PGlite } from "@electric-sql/pglite";
-import { readFile } from "node:fs/promises";
+import { BlobPreconditionFailedError, get, put } from "@vercel/blob";
+import { randomUUID } from "node:crypto";
+import { link, mkdir, readFile, rename, unlink, writeFile } from "node:fs/promises";
 import { demoMode } from "./config";
-
-type Param = string | number | null;
-type LocalState = typeof globalThis & { householdLocal?: Promise<PGlite> };
-const local = globalThis as LocalState;
-
-async function initLocal() {
-  const { PGlite } = await import("@electric-sql/pglite");
-  const db = await PGlite.create(".data");
-  await db.exec(await readFile("schema.sql", "utf8"));
-  await db.exec(`
-    CREATE TABLE IF NOT EXISTS demo_seed (seeded boolean PRIMARY KEY);
-    INSERT INTO groceries (id, name, quantity, status, claimed_by)
-    SELECT id::uuid, name, quantity, status, claimed_by FROM (VALUES
-      ('78a40000-0000-4000-8000-000000000001','Oat milk','2 cartons','buy',NULL),
-      ('78a40000-0000-4000-8000-000000000002','Eggs','1 dozen','buy','jordan'),
-      ('78a40000-0000-4000-8000-000000000003','Avocados','3','buy',NULL),
-      ('78a40000-0000-4000-8000-000000000004','Rice','Keep 1 bag','maintain',NULL),
-      ('78a40000-0000-4000-8000-000000000005','Olive oil','Keep 1 bottle','maintain',NULL),
-      ('78a40000-0000-4000-8000-000000000006','Old yogurt','1 tub','remove',NULL)
-    ) AS samples(id, name, quantity, status, claimed_by)
-    WHERE NOT EXISTS (SELECT FROM demo_seed);
-    INSERT INTO chores (id, name, assignee, due_on, reward_cents, status)
-    SELECT id::uuid, name, assignee, CURRENT_DATE + days, reward, status FROM (VALUES
-      ('78a40000-0000-4000-8000-000000000007','Take out recycling','sam',0,500,'open'),
-      ('78a40000-0000-4000-8000-000000000008','Clean the kitchen',NULL,1,1500,'open'),
-      ('78a40000-0000-4000-8000-000000000009','Water the plants','jordan',1,800,'done')
-    ) AS samples(id, name, assignee, days, reward, status)
-    WHERE NOT EXISTS (SELECT FROM demo_seed);
-    INSERT INTO schedule (id, member_id, status, starts_at, ends_at, note)
-    SELECT id::uuid, member_id, status, CURRENT_DATE + days + start_time::time,
-      CURRENT_DATE + days + end_time::time, note FROM (VALUES
-        ('78a40000-0000-4000-8000-000000000010','jordan','away',0,'09:00','17:00','Work'),
-        ('78a40000-0000-4000-8000-000000000011','alex','home',0,'16:00','20:00',''),
-        ('78a40000-0000-4000-8000-000000000012','sam','away',1,'10:00','13:00','Errands')
-    ) AS samples(id, member_id, status, days, start_time, end_time, note)
-    WHERE NOT EXISTS (SELECT FROM demo_seed);
-    INSERT INTO demo_seed VALUES (true) ON CONFLICT DO NOTHING;
-  `);
-  return db;
-}
-
-export async function query<T>(sql: string, params: Param[] = []) {
-  const url = process.env.DATABASE_URL;
-  if (url) return await neon(url).query(sql, params) as T[];
-  if (!demoMode) throw new Error("Database configuration is required.");
-  const db = await (local.householdLocal ??= initLocal());
-  return (await db.query<T>(sql, params)).rows;
-}
 
 export type Grocery = {
   id: string;
@@ -77,17 +29,109 @@ export type ScheduleEntry = {
   note: string;
 };
 
-export function loadBoard(timeZone: string) {
-  return Promise.all([
-    query<Grocery>("SELECT * FROM groceries ORDER BY created_at DESC, name"),
-    query<Chore>(`SELECT id, name, assignee, due_on::text, reward_cents, status, paid_by,
-      to_char(paid_at AT TIME ZONE $1, 'YYYY-MM-DD') AS paid_on
-      FROM chores ORDER BY CASE status WHEN 'open' THEN 0 WHEN 'done' THEN 1 ELSE 2 END,
-      due_on NULLS LAST, created_at DESC`, [timeZone]),
-    query<ScheduleEntry>(`SELECT id, member_id, status,
-      to_char(starts_at, 'YYYY-MM-DD"T"HH24:MI') AS starts_at,
-      to_char(ends_at, 'YYYY-MM-DD"T"HH24:MI') AS ends_at, note
-      FROM schedule WHERE ends_at >= (now() AT TIME ZONE $1)::date
-      ORDER BY starts_at, member_id`, [timeZone]),
-  ]);
+export type BoardData = { groceries: Grocery[]; chores: Chore[]; schedule: ScheduleEntry[] };
+type Update = (board: BoardData) => string | undefined;
+
+const pathname = "household/board-v1.json";
+const demoFile = ".data/board-v1.json";
+const local = globalThis as typeof globalThis & { householdWrite?: Promise<unknown> };
+
+export function householdDate(timeZone: string, at = new Date()) {
+  return new Intl.DateTimeFormat("en-CA", { timeZone, year: "numeric", month: "2-digit", day: "2-digit" }).format(at);
+}
+
+function demoBoard(timeZone: string): BoardData {
+  const today = householdDate(timeZone);
+  const tomorrow = new Date(`${today}T12:00:00Z`);
+  tomorrow.setUTCDate(tomorrow.getUTCDate() + 1);
+  const nextDay = tomorrow.toISOString().slice(0, 10);
+  return {
+    groceries: [
+      { id: randomUUID(), name: "Oat milk", quantity: "2 cartons", status: "buy", claimed_by: null },
+      { id: randomUUID(), name: "Eggs", quantity: "1 dozen", status: "buy", claimed_by: "jordan" },
+      { id: randomUUID(), name: "Rice", quantity: "Keep 1 bag", status: "maintain", claimed_by: null },
+      { id: randomUUID(), name: "Old yogurt", quantity: "1 tub", status: "remove", claimed_by: null },
+    ],
+    chores: [
+      { id: randomUUID(), name: "Take out recycling", assignee: "sam", due_on: today, reward_cents: 500, status: "open", paid_by: null, paid_on: null },
+      { id: randomUUID(), name: "Clean the kitchen", assignee: null, due_on: nextDay, reward_cents: 1500, status: "open", paid_by: null, paid_on: null },
+      { id: randomUUID(), name: "Water the plants", assignee: "jordan", due_on: nextDay, reward_cents: 800, status: "done", paid_by: null, paid_on: null },
+    ],
+    schedule: [
+      { id: randomUUID(), member_id: "jordan", status: "away", starts_at: `${today}T09:00`, ends_at: `${today}T17:00`, note: "Work" },
+      { id: randomUUID(), member_id: "alex", status: "home", starts_at: `${today}T16:00`, ends_at: `${today}T20:00`, note: "" },
+    ],
+  };
+}
+
+async function readDemo(timeZone: string) {
+  try {
+    return JSON.parse(await readFile(demoFile, "utf8")) as BoardData;
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
+    await mkdir(".data", { recursive: true });
+    const board = demoBoard(timeZone);
+    const temporary = `${demoFile}.${randomUUID()}`;
+    await writeFile(temporary, JSON.stringify(board));
+    try {
+      await link(temporary, demoFile);
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== "EEXIST") throw error;
+      return JSON.parse(await readFile(demoFile, "utf8")) as BoardData;
+    } finally {
+      await unlink(temporary);
+    }
+    return board;
+  }
+}
+
+async function readProduction() {
+  const result = await get(pathname, { access: "private", useCache: false });
+  if (!result) return { board: { groceries: [], chores: [], schedule: [] } as BoardData };
+  if (result.statusCode !== 200) throw new Error("Unexpected Blob response.");
+  const board = await new Response(result.stream).json() as BoardData;
+  return { board, etag: result.blob.etag };
+}
+
+export async function loadBoard(timeZone: string) {
+  const board = demoMode ? await readDemo(timeZone) : (await readProduction()).board;
+  return {
+    groceries: board.groceries,
+    chores: [...board.chores].sort((a, b) => (a.due_on ?? "9999").localeCompare(b.due_on ?? "9999")),
+    schedule: board.schedule.filter((entry) => entry.ends_at.slice(0, 10) >= householdDate(timeZone))
+      .sort((a, b) => a.starts_at.localeCompare(b.starts_at)),
+  };
+}
+
+export async function updateData(timeZone: string, update: Update) {
+  if (demoMode) {
+    const pending = (local.householdWrite ?? Promise.resolve()).catch(() => {}).then(async () => {
+      const board = await readDemo(timeZone);
+      const error = update(board);
+      if (error) return error;
+      const pendingFile = `${demoFile}.${randomUUID()}`;
+      await writeFile(pendingFile, JSON.stringify(board));
+      await rename(pendingFile, demoFile);
+    });
+    local.householdWrite = pending;
+    return pending;
+  }
+
+  for (let attempt = 0; attempt < 4; attempt++) {
+    const { board, etag } = await readProduction();
+    const error = update(board);
+    if (error) return error;
+    try {
+      await put(pathname, JSON.stringify(board), {
+        access: "private", contentType: "application/json",
+        addRandomSuffix: false, allowOverwrite: Boolean(etag), ifMatch: etag,
+      });
+      return;
+    } catch (error) {
+      if (error instanceof BlobPreconditionFailedError) continue;
+      if (!etag && (await readProduction()).etag) continue;
+      throw error;
+    }
+  }
+  return "Someone else updated the board. Try again.";
 }

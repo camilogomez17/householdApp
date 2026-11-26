@@ -1,5 +1,5 @@
 import { CalendarDays, Check, ChevronDown, Clock3, CircleDollarSign, House, ListChecks,
-  LogOut, Plus, ShoppingBasket, Trash2, X } from "lucide-react";
+  LogOut, Plus, ShoppingBasket, Trash2, Users, X } from "lucide-react";
 import Link from "next/link";
 import type { Chore, Grocery, ScheduleEntry } from "../lib/data";
 import { logout, updateBoard } from "./actions";
@@ -227,6 +227,7 @@ export function Board({ section, data, member, people, currency, timeZone, date,
           return <Link key={key} href={key === "groceries" ? "/" : `/?section=${key}`}
             aria-current={section === key ? "page" : undefined}><Icon size={19} />{name}</Link>;
         })}
+        {member.manager && <Link className="family-link" href="/family"><Users size={19} />Family links</Link>}
       </nav>
       <div className="profile">
         <span className="avatar" aria-hidden="true">{member.name.slice(0, 1).toUpperCase()}</span>
@@ -263,7 +264,7 @@ export function Unavailable({ setup }: { setup?: boolean }) {
   return <main className="auth-page">
     <div className="auth-card"><Brand /><span className="auth-symbol"><X size={26} /></span>
       <h1>{setup ? "Household setup required" : "Board unavailable"}</h1>
-      <p>{setup ? "Set up the database and private member keys before opening the board." : "The board couldn’t connect to its database. Try again in a moment."}</p>
+      <p>{setup ? "Private household storage is still being set up." : "The board couldn’t connect to storage. Try again in a moment."}</p>
       {!setup && <Link className="button secondary" href="/">Try again</Link>}
     </div>
   </main>;
