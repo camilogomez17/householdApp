@@ -36,8 +36,9 @@ export function MealsBoard({ meals, groceries, people, member, today, catalog }:
     </div></div>
     {weeks.map((start) => <details key={start} open={start === weeks[0]} className="meal-week">
       <summary className="meal-week-title">Week of {fmt.format(new Date(`${start}T12:00:00Z`)).replace(/^\w+, /, "")}</summary>
+      {start === weeks[0] && start < today && <p className="item-meta" role="status">Day passed! {Math.floor((Date.parse(today) - Date.parse(start)) / 86400000)} past day(s) hidden.</p>}
       <div className="meal-days">
-        {Array.from({ length: 7 }, (_, index) => shiftDate(start, index)).map((day) => <section key={day} className="lane meal-day">
+        {Array.from({ length: 7 }, (_, index) => shiftDate(start, index)).filter((day) => day >= today).map((day) => <section key={day} className="lane meal-day">
           <div className="lane-heading"><h3>{fmt.format(new Date(`${day}T12:00:00Z`))}</h3></div>
           <div className="meal-slots">
             {slots.map((slot) => {
