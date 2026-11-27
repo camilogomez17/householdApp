@@ -1,4 +1,4 @@
-import type { GrocerySection } from "./grocery-sections";
+import type { GrocerySection, GroceryCatalogItem } from "./grocery-sections";
 import { BlobPreconditionFailedError, get, put } from "@vercel/blob";
 import { randomUUID } from "node:crypto";
 import { link, mkdir, readFile, rename, unlink, writeFile } from "node:fs/promises";
@@ -59,6 +59,7 @@ export type Checklist = { id: string; title: string; items: ChecklistItem[] };
 
 export type BoardData = {
   groceries: Grocery[];
+  groceryCatalog: GroceryCatalogItem[];
   chores: Chore[];
   schedule: ScheduleEntry[];
   events: CalendarEvent[];
@@ -67,8 +68,8 @@ export type BoardData = {
 };
 
 function parseBoard(value: unknown): BoardData {
-  const board = value as Omit<BoardData, "events" | "lists" | "meals"> & Partial<Pick<BoardData, "events" | "lists" | "meals">>;
-  return { ...board, events: board.events ?? [], lists: board.lists ?? [], meals: board.meals ?? [] };
+  const board = value as Omit<BoardData, "events" | "lists" | "meals" | "groceryCatalog"> & Partial<Pick<BoardData, "events" | "lists" | "meals" | "groceryCatalog">>;
+  return { ...board, events: board.events ?? [], lists: board.lists ?? [], meals: board.meals ?? [], groceryCatalog: board.groceryCatalog ?? [] };
 }
 type Update = (board: BoardData) => string | undefined;
 
@@ -115,6 +116,7 @@ function demoBoard(timeZone: string): BoardData {
     events: [],
     lists: [],
     meals: [],
+    groceryCatalog: [],
     groceries: [
       { id: randomUUID(), name: "Oat milk", quantity: "2 cartons", status: "buy", claimed_by: null },
       { id: randomUUID(), name: "Eggs", quantity: "1 dozen", status: "buy", claimed_by: "jordan" },
@@ -161,7 +163,7 @@ async function readProduction() {
     headers: { "Accept-Encoding": "identity" },
     abortSignal: AbortSignal.timeout(10_000),
   });
-  if (!result) return { board: { groceries: [], chores: [], schedule: [], events: [], lists: [], meals: [] } as BoardData };
+  if (!result) return { board: { groceries: [], chores: [], schedule: [], events: [], lists: [], meals: [], groceryCatalog: [] } as BoardData };
   if (result.statusCode !== 200) throw new Error("Unexpected Blob response.");
   const board = parseBoard(await new Response(result.stream).json());
   // Blob's CDN can prefix the stored ETag with W/ for compressed GETs.
@@ -176,6 +178,7 @@ export async function loadBoard(timeZone: string, calendarRange?: { first: strin
   const today = householdDate(timeZone);
   return {
     groceries: board.groceries,
+    groceryCatalog: board.groceryCatalog,
     chores: [...board.chores].sort((a, b) => (a.due_on ?? "9999").localeCompare(b.due_on ?? "9999")),
     schedule: scheduleInRange(board.schedule, today),
     calendarSchedule: calendarRange ? scheduleInRange(board.schedule, calendarRange.first, calendarRange.last) : [],

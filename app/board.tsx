@@ -1,3 +1,5 @@
+import { GroceryFields } from "./grocery-fields";
+import type { GroceryCatalogItem } from "../lib/grocery-sections";
 import { grocerySections, grocerySection } from "../lib/grocery-sections";
 import { CalendarDays, Check, ChevronDown, ClipboardList, Clock3, CircleDollarSign, House, ListChecks,
   LogOut, Plus, ShoppingBasket, Trash2, Users, UtensilsCrossed, X } from "lucide-react";
@@ -97,24 +99,11 @@ function ItemAction({ id, intent, label, assignee, variant = "plain" }: {
   </ActionForm>;
 }
 
-function GroceryFields({ item }: { item?: Grocery }) {
-  return <>
-    <label>Item<input name="name" placeholder="e.g. Oat milk" defaultValue={item?.name} maxLength={80} required /></label>
-    <label>Quantity or target<input name="quantity" placeholder="e.g. 2 cartons" defaultValue={item?.quantity} maxLength={40} /></label>
-    <label>Department<select name="section" defaultValue={item ? grocerySection(item) : "Other"}>
-      {grocerySections.map((section) => <option key={section}>{section}</option>)}
-    </select></label>
-    <label>List<select name="status" defaultValue={item?.status ?? "buy"}>
-      <option value="buy">To buy</option><option value="maintain">Maintain stock</option><option value="remove">Remove</option>
-    </select></label>
-  </>;
-}
-
-function GroceryBoard({ items, member, people }: { items: Grocery[]; member: Viewer; people: Person[] }) {
+function GroceryBoard({ items, member, people, catalog }: { items: Grocery[]; member: Viewer; people: Person[]; catalog: GroceryCatalogItem[] }) {
   return <>
     <div className="section-head">
       <div><h2>Grocery lists</h2><p>Claim an item before shopping to avoid a double purchase.</p></div>
-      <QuickForm intent="grocery-add" title="Add grocery"><GroceryFields /></QuickForm>
+      <QuickForm intent="grocery-add" title="Add grocery"><GroceryFields catalog={catalog} /></QuickForm>
     </div>
     <div className="lanes">
       {(Object.keys(groceryGroups) as Grocery["status"][]).map((status) => {
@@ -138,7 +127,7 @@ function GroceryBoard({ items, member, people }: { items: Grocery[]; member: Vie
                   ? <ItemAction id={item.id} intent="grocery-claim" label="Claim" />
                   : item.claimed_by === member.id && <ItemAction id={item.id} intent="grocery-release" label="Release" />)}
                 {status === "remove" && <ItemAction id={item.id} intent="grocery-delete" label="Clear item" variant="danger" />}
-                <EditForm id={item.id} intent="grocery-edit"><GroceryFields item={item} /></EditForm>
+                <EditForm id={item.id} intent="grocery-edit"><GroceryFields item={item} catalog={catalog} /></EditForm>
               </div>
             </li>)}
           </ul></div>;
@@ -319,7 +308,7 @@ export function Board({ section, data, member, people, currency, timeZone, date,
             </Link>;
           })}
         </div>
-        {section === "groceries" && <GroceryBoard items={data.groceries} member={member} people={people} />}
+        {section === "groceries" && <GroceryBoard catalog={[...data.groceries.map(item => ({name: item.name, section: grocerySection(item)})), ...data.groceryCatalog]} items={data.groceries} member={member} people={people} />}
         {section === "chores" && <ChoreBoard items={data.chores} member={member} people={people} currency={currency} />}
         {section === "calendar" && <>
           <CalendarBoard window={calendar} today={date} events={data.events} schedule={data.calendarSchedule} people={people} memberId={member.id} />

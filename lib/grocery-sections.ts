@@ -19,3 +19,20 @@ export function grocerySection(item: { name: string; section?: GrocerySection })
   ];
   return rules.find(([, pattern]) => pattern.test(name))?.[0] ?? "Other";
 }
+
+export type GroceryCatalogItem = { name: string; section: GrocerySection };
+export const normalizeGroceryName = (name: string) => name.trim().toLowerCase().replace(/\s+/g, " ");
+const catalogGroups: Partial<Record<GrocerySection, string>> = {
+  "Produce": "Apple|Banana|Orange|Pear|Peach|Grapes|Strawberries|Blueberries|Raspberries|Blackberries|Pineapple|Mango|Papaya|Watermelon|Cantaloupe|Kiwi|Lemon|Lime|Avocado|Tomato|Potato|Sweet potato|Onion|Red onion|Garlic|Carrot|Celery|Broccoli|Cauliflower|Spinach|Kale|Lettuce|Cucumber|Bell pepper|Jalapeño|Zucchini|Eggplant|Mushrooms|Cabbage|Asparagus|Green beans|Cilantro|Parsley|Ginger|Plantain|Yuca|Scallions|Radishes|Beets",
+  "Meat & Poultry": "Chicken breast|Chicken thighs|Chicken wings|Whole chicken|Ground beef|Steak|Ground turkey|Turkey breast|Pork chops|Bacon|Sausage|Ham|Ground pork|Lamb",
+  "Seafood": "Salmon|Tuna|Shrimp|Cod|Tilapia|Trout|Sardines|Crab|Lobster|Scallops|Mussels",
+  "Dairy & Eggs": "Milk|Whole milk|Skim milk|Oat milk|Almond milk|Soy milk|Eggs|Butter|Cheddar cheese|Mozzarella|Parmesan|Cream cheese|Greek yogurt|Yogurt|Sour cream|Heavy cream|Cottage cheese",
+  "Bakery": "Bread|Whole wheat bread|Sourdough bread|Bagels|Croissants|Buns|Dinner rolls|Tortillas|Pita bread|English muffins",
+  "Pantry": "Rice|Brown rice|Pasta|Spaghetti|Flour|Sugar|Salt|Black pepper|Olive oil|Vegetable oil|Vinegar|Oats|Oatmeal|Cereal|Lentils|Black beans|Kidney beans|Chickpeas|Canned tomatoes|Tomato sauce|Peanut butter|Jam|Honey|Soy sauce|Hot sauce|Ketchup|Mustard|Mayonnaise|Quinoa|Canned tuna|Coconut milk|Chicken broth|Baking powder|Baking soda|Cinnamon|Cumin|Paprika",
+  "Frozen Foods": "Frozen vegetables|Frozen peas|Frozen broccoli|Frozen berries|Frozen pizza|Frozen fries|Ice cream|Frozen shrimp|Frozen chicken|Frozen waffles",
+  "Beverages": "Water|Sparkling water|Orange juice|Apple juice|Coffee|Tea|Soda|Lemonade|Sports drink",
+  "Snacks": "Potato chips|Tortilla chips|Crackers|Popcorn|Almonds|Cashews|Peanuts|Trail mix|Cookies|Granola bars|Chocolate|Pretzels",
+  "Household": "Paper towels|Toilet paper|Dish soap|Laundry detergent|Trash bags|Sponges|All-purpose cleaner|Aluminum foil|Plastic wrap|Dishwasher tablets",
+  "Personal Care": "Toothpaste|Toothbrush|Shampoo|Conditioner|Deodorant|Body wash|Hand soap|Floss|Razor|Lotion|Sunscreen"
+};
+export const groceryCatalog: GroceryCatalogItem[] = grocerySections.flatMap(section => (catalogGroups[section] ?? "").split("|").filter(Boolean).map(name => ({ name, section })));

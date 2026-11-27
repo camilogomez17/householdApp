@@ -1,6 +1,6 @@
 "use server";
 
-import { grocerySections } from "../lib/grocery-sections";
+import { grocerySections, normalizeGroceryName } from "../lib/grocery-sections";
 import { randomUUID } from "node:crypto";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
@@ -275,6 +275,7 @@ export async function updateBoard(_: FormResult, form: FormData): Promise<FormRe
           break;
         }
         case "grocery-add":
+          { const entry = { name: input.name, section: input.section }; board.groceryCatalog = [...board.groceryCatalog.filter(item => normalizeGroceryName(item.name) !== normalizeGroceryName(entry.name)), entry]; }
           board.groceries.unshift({ id: randomUUID(), name: input.name, quantity: input.quantity,
             status: input.status, section: input.section, claimed_by: null });
           break;
@@ -284,6 +285,7 @@ export async function updateBoard(_: FormResult, form: FormData): Promise<FormRe
           grocery.quantity = input.quantity;
           grocery.status = input.status;
           grocery.section = input.section;
+          { const entry = { name: input.name, section: input.section }; board.groceryCatalog = [...board.groceryCatalog.filter(item => normalizeGroceryName(item.name) !== normalizeGroceryName(entry.name)), entry]; }
           if (input.status !== "buy") grocery.claimed_by = null;
           break;
         case "grocery-claim":
