@@ -147,15 +147,23 @@ export function CalendarBoard({ window, today, events, schedule, people, memberI
       </nav>
       <div className="calendar-grid">
         {weekdays.map((name) => <span className="calendar-weekday" key={name}>{name}</span>)}
-        {days.map(({ date, events, availability }) => <Link key={date} href={`${href(date)}#day-agenda`}
-          className={`calendar-day ${date.slice(0, 7) !== day.slice(0, 7) ? "outside-month" : ""}`}
-          aria-current={date === day ? "date" : undefined}
-          aria-label={`${dayLabel.format(asDate(date))}, ${events.length} calendar entries, ${availability.length} availability blocks`}>
-          <span className="calendar-date">{Number(date.slice(8))}</span>
-          {events.length > 0 && <span className={`calendar-marker ${events[0].kind}`}>{events[0].title}</span>}
-          {availability.length > 0 && <span className="calendar-marker availability">{availability.length} availability</span>}
-          {events.length > 1 && <small className="calendar-extra">+{events.length - 1}</small>}
-        </Link>)}
+        {days.map(({ date, events, availability }) => {
+          const statuses = [...new Map(availability.map(({ member_id, status }) => [
+            `${member_id}-${status}`, { name: nameOf(member_id), status, label: status === "home" ? "Home" : "Away" },
+          ])).entries()];
+          const statusLabels = statuses.map(([, { name, label }]) => `${name} ${label}`);
+          return <Link key={date} href={`${href(date)}#day-agenda`}
+            className={`calendar-day ${date.slice(0, 7) !== day.slice(0, 7) ? "outside-month" : ""}`}
+            aria-current={date === day ? "date" : undefined}
+            aria-label={[dayLabel.format(asDate(date)), `${events.length} calendar entries`, ...statusLabels].join(", ")}>
+            <span className="calendar-date">{Number(date.slice(8))}</span>
+            {events.length > 0 && <span className={`calendar-marker ${events[0].kind}`}>{events[0].title}</span>}
+            {statuses.map(([key, { name, status, label }]) => <span key={key} className={`calendar-availability ${status}`}>
+              <span>{name}</span><span>{label}</span>
+            </span>)}
+            {events.length > 1 && <small className="calendar-extra">+{events.length - 1}</small>}
+          </Link>;
+        })}
       </div>
     </div>
     {birthdays.length > 0 && <div className="lane calendar-agenda">

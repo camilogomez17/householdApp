@@ -224,7 +224,7 @@ summary::-webkit-details-marker { display: none; }
 .past-schedule > summary { justify-content: space-between; font-weight: 650; }
 .past-schedule:not([open]) > summary { border-bottom: 0; }
 
-.stat-icon.calendar, .calendar-marker.availability { background: #e5edf8; color: #365880; }
+.stat-icon.calendar { background: #e5edf8; color: #365880; }
 .household-calendar { margin-bottom: 30px; }
 .calendar-card { padding: 12px; }
 .calendar-controls { display: flex; align-items: center; gap: 7px; margin-bottom: 12px; }
@@ -259,7 +259,6 @@ summary::-webkit-details-marker { display: none; }
   .calendar-day { min-height: 45px; padding: 3px; }
   .calendar-marker { width: 8px; height: 8px; padding: 0; border-radius: 50%; background: #4b8b69; font-size: 0; }
   .calendar-marker.birthday { background: #b47a35; }
-  .calendar-marker.availability { background: #5b80aa; }
   .calendar-weekday { font-size: .72rem; }
   .calendar-extra { display: none; }
   .checklists { grid-template-columns: 1fr; }
@@ -284,4 +283,23 @@ summary::-webkit-details-marker { display: none; }
 #day-agenda, #calendar-month, #calendar-add { scroll-margin-top: 12px; }
 @media (max-width: 620px) {
   .calendar-agenda-head .calendar-controls { margin-left: 0; }
+}
+
+
+.calendar-availability {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0 4px;
+  max-width: 100%;
+  padding: 1px 4px;
+  border-radius: 4px;
+  font-size: .74rem;
+  line-height: 1.25;
+}
+.calendar-availability span:first-child { font-weight: 700; overflow-wrap: anywhere; }
+.calendar-availability.home { background: #e2f2e7; color: #245745; }
+.calendar-availability.away { background: #e5edf8; color: #365880; }
+@media (max-width: 620px) {
+  .calendar-availability { padding: 1px 2px; font-size: .66rem; }
 }
