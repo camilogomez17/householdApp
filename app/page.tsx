@@ -3,6 +3,8 @@ import { demoMode, getConfig } from "../lib/config";
 import { householdDate, loadBoard } from "../lib/data";
 import { currentMember, memberInvite } from "../lib/session";
 import { Board, Brand, Unavailable, type Section } from "./board";
+import { enterAccessCode } from "./actions";
+import { ActionForm, Submit } from "./forms";
 
 export const dynamic = "force-dynamic";
 
@@ -15,7 +17,15 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ s
       <Brand />
       <span className="auth-symbol"><LockKeyhole size={26} /></span>
       <h1>Welcome home</h1>
-      <p>Open your personal household link to see groceries, chores and schedules.</p>
+      <p>Enter your personal code to open groceries, chores and schedules.</p>
+      <ActionForm action={enterAccessCode} className="entry-form">
+        <label>Access code
+          <input name="code" placeholder="XXXX-XXXX-XXXX" autoCapitalize="characters"
+            autoComplete="off" spellCheck={false} maxLength={32} required />
+        </label>
+        <Submit>Open household board</Submit>
+      </ActionForm>
+      <p className="share-note">Your personal invite link also opens the board.</p>
       {demoMode && <div className="demo-access"><h2>Try a demo profile</h2>
         {config.members.map((person) => <a className="button secondary" key={person.id}
           href={`/join#${memberInvite(person.id, config.secret)}`}>{person.name}</a>)}

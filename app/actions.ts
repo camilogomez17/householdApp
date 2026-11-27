@@ -6,7 +6,7 @@ import { redirect } from "next/navigation";
 import { z } from "zod";
 import { getConfig } from "../lib/config";
 import { householdDate, updateData } from "../lib/data";
-import { currentMember, signIn, signOut } from "../lib/session";
+import { currentMember, signIn, signInWithCode, signOut } from "../lib/session";
 
 export type FormResult = { error?: string; saved?: boolean };
 
@@ -15,6 +15,14 @@ export async function acceptInvite(token: string) {
     return { error: "This link no longer works. Ask for a new household link." };
   }
   return { saved: true };
+}
+
+export async function enterAccessCode(_: FormResult, form: FormData): Promise<FormResult> {
+  const code = form.get("code");
+  if (typeof code !== "string" || !(await signInWithCode(code))) {
+    return { error: "That code didn’t match. Check it and try again." };
+  }
+  redirect("/");
 }
 
 export async function logout() {

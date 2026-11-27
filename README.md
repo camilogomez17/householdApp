@@ -8,7 +8,7 @@ Private Next.js board for shared groceries, chores and home/away schedules.
 
 ## Using the board
 
-Open your personal household link. It signs you in on that device. The household manager can open **Family links** and tap **Share link** next to each person. Send each link privately because anyone who has it can use that profile.
+Enter your personal access code on the homepage or open your personal household link. Either signs you in on that device. The household manager can find each member’s code in **Family links** or tap **Share link** next to their name. Send these privately because anyone who has a code or link can use that profile.
 
 Managers can assign chores to others, set rewards and record payments. Other members can claim unassigned work and complete their own chores. Everyone can update shared groceries and manage their own home/away schedule. Payments take place outside the app.
 

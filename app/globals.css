@@ -198,3 +198,16 @@ summary::-webkit-details-marker { display: none; }
 @media (max-width: 850px) {
   .sidebar nav .family-link { grid-column: 1 / -1; font-size: .85rem; }
 }
+
+.family-code {
+  display: block;
+  width: fit-content;
+  margin-top: 4px;
+  padding: 4px 8px;
+  border-radius: 6px;
+  background: #eff5f1;
+  color: var(--forest);
+  font-size: 1rem;
+  font-weight: 650;
+  overflow-wrap: anywhere;
+}
