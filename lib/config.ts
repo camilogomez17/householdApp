@@ -12,9 +12,9 @@ const rosterSchema = z.array(memberSchema).min(1).max(20).refine(
 );
 
 const household = [
-  { id: "owner", name: "Household manager", manager: true },
+  { id: "owner", name: "Camilo", manager: true },
   { id: "mom", name: "Mom", manager: false },
-  { id: "stepdad", name: "Stepdad", manager: false },
+  { id: "stepdad", name: "Dad", manager: false },
 ];
 
 const demoMembers = [
