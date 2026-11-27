@@ -17,3 +17,18 @@ export function calendarWindow(today: string, selection?: string) {
     next: next.toISOString().slice(0, 10),
   };
 }
+
+
+export function birthdayInYear(monthDay: string, year: number) {
+  const date = `${year}-${monthDay}`;
+  if (monthDay === "02-29" && shiftDate(`${year}-02-28`, 1).endsWith("03-01")) {
+    return `${year}-02-28`;
+  }
+  return date;
+}
+
+export function nextBirthday(monthDay: string, today: string) {
+  const year = Number(today.slice(0, 4));
+  const thisYear = birthdayInYear(monthDay, year);
+  return thisYear >= today ? thisYear : birthdayInYear(monthDay, year + 1);
+}

@@ -1,13 +1,14 @@
 import { Cake, CalendarDays, ChevronLeft, ChevronRight, Clock3, Plus } from "lucide-react";
 import Link from "next/link";
 import { shiftDate, type CalendarEvent, type ScheduleEntry } from "../lib/data";
-import type { calendarWindow } from "../lib/calendar";
+import { birthdayInYear, nextBirthday, type calendarWindow } from "../lib/calendar";
 import { updateBoard } from "./actions";
 import { ActionForm, Submit } from "./forms";
 
 const weekdays = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 const monthLabel = new Intl.DateTimeFormat("en-US", { month: "long", year: "numeric", timeZone: "UTC" });
 const dayLabel = new Intl.DateTimeFormat("en-US", { dateStyle: "full", timeZone: "UTC" });
+const birthdayLabel = new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric", timeZone: "UTC" });
 const clock = new Intl.DateTimeFormat("en-US", { hour: "numeric", minute: "2-digit", timeZone: "UTC" });
 const asDate = (date: string) => new Date(`${date}T12:00:00Z`);
 const timeLabel = (time: string) => clock.format(new Date(`2000-01-01T${time}:00Z`));
@@ -15,8 +16,7 @@ const href = (day: string) => `/?section=calendar&day=${day}`;
 
 function occursOn(event: CalendarEvent, date: string) {
   if (event.kind === "event") return event.date === date;
-  if (event.date === date.slice(5)) return true;
-  return event.date === "02-29" && date.slice(5) === "02-28" && shiftDate(date, 1).endsWith("03-01");
+  return birthdayInYear(event.date, Number(date.slice(0, 4))) === date;
 }
 
 function EventFields({ day, event }: { day: string; event?: CalendarEvent }) {
@@ -52,6 +52,9 @@ export function CalendarBoard({ window, today, events, schedule, people }: {
     });
   }
   const selected = days.find((item) => item.date === day);
+  const birthdays = events.filter((event) => event.kind === "birthday")
+    .map((event) => ({ ...event, nextDate: nextBirthday(event.date, today) }))
+    .sort((a, b) => a.nextDate.localeCompare(b.nextDate));
   const nameOf = (id: string) => people.find((person) => person.id === id)?.name ?? "Former member";
 
   return <section className="household-calendar" aria-labelledby="calendar-month">
@@ -123,5 +126,15 @@ export function CalendarBoard({ window, today, events, schedule, people }: {
       </ul>
       {selected?.events.some((event) => event.kind === "birthday") && <div className="birthday-note"><Cake size={15} /> Birthdays repeat every year.</div>}
     </div>
+    {birthdays.length > 0 && <div className="lane calendar-agenda">
+      <div className="lane-heading"><span className="lane-icon buy"><Cake size={18} /></span><h3>Birthdays</h3></div>
+      <ul className="items">
+        {birthdays.map((birthday) => <li className="item" key={birthday.id}>
+          <Link className="birthday-link item-title" href={href(birthday.nextDate)}>
+            <strong>{birthday.title}</strong><small>{birthdayLabel.format(asDate(birthday.nextDate))}</small>
+          </Link>
+        </li>)}
+      </ul>
+    </div>}
   </section>;
 }

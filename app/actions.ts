@@ -5,6 +5,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { z } from "zod";
 import { getConfig } from "../lib/config";
+import { nextBirthday } from "../lib/calendar";
 import { householdDate, shiftDate, updateData } from "../lib/data";
 import { currentMember, signIn, signInWithCode, signOut } from "../lib/session";
 
@@ -52,7 +53,7 @@ const scheduleFields = {
 const eventFields = {
   title: name,
   kind: z.enum(["event", "birthday"]),
-  date: scheduleDate,
+  date: z.iso.date(),
   time: z.union([z.literal(""), scheduleTime]),
   note: z.string().trim().max(100),
 };
@@ -99,9 +100,13 @@ export async function updateBoard(_: FormResult, form: FormData): Promise<FormRe
   }
 
   const parsed = task.safeParse(fields);
-  if (!parsed.success) return { error: scheduleForm
-    ? "Check the date, both times, and the note (100 characters maximum)."
-    : "Check the fields and try again." };
+  if (!parsed.success) {
+    if (scheduleForm) return { error: "Check the date, both times, and the note (100 characters maximum)." };
+    if (fields.intent === "calendar-add" || fields.intent === "calendar-edit") {
+      return { error: "Enter a name and a valid date. The note can be up to 100 characters." };
+    }
+    return { error: "Check the fields and try again." };
+  }
 
   const input = parsed.data;
   const repeatDays = scheduleForm ? form.getAll("repeatDay") : [];
@@ -127,6 +132,9 @@ export async function updateBoard(_: FormResult, form: FormData): Promise<FormRe
       switch (input.intent) {
         case "calendar-add":
         case "calendar-edit": {
+          if (input.kind === "event" && !input.date.startsWith("20")) {
+            return "Choose an event date between 2000 and 2099.";
+          }
           const event = input.intent === "calendar-edit" ? board.events.find((row) => row.id === input.id) : undefined;
           if (input.intent === "calendar-edit" && !event) return stale;
           const details = { title: input.title, kind: input.kind,
@@ -268,5 +276,11 @@ export async function updateBoard(_: FormResult, form: FormData): Promise<FormRe
   }
 
   revalidatePath("/");
+  if (input.intent === "calendar-add" || input.intent === "calendar-edit") {
+    const day = input.kind === "birthday"
+      ? nextBirthday(input.date.slice(5), householdDate(config.timeZone))
+      : input.date;
+    redirect(`/?section=calendar&day=${day}`);
+  }
   return { saved: true };
 }

@@ -268,3 +268,5 @@ summary::-webkit-details-marker { display: none; }
 @media (max-width: 420px) {
   .sidebar nav a:not(.family-link) { flex-direction: column; gap: 3px; padding-block: 6px; font-size: .77rem; }
 }
+
+.birthday-link:hover strong { text-decoration: underline; }
