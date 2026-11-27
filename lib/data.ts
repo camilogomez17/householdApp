@@ -30,7 +30,30 @@ export type ScheduleEntry = {
   repeat_on?: number[];
 };
 
-export type BoardData = { groceries: Grocery[]; chores: Chore[]; schedule: ScheduleEntry[] };
+export type CalendarEvent = {
+  id: string;
+  kind: "event" | "birthday";
+  title: string;
+  date: string;
+  time: string;
+  note: string;
+};
+
+export type ChecklistItem = { id: string; label: string; checked: boolean };
+export type Checklist = { id: string; title: string; items: ChecklistItem[] };
+
+export type BoardData = {
+  groceries: Grocery[];
+  chores: Chore[];
+  schedule: ScheduleEntry[];
+  events: CalendarEvent[];
+  lists: Checklist[];
+};
+
+function parseBoard(value: unknown): BoardData {
+  const board = value as Omit<BoardData, "events" | "lists"> & Partial<Pick<BoardData, "events" | "lists">>;
+  return { ...board, events: board.events ?? [], lists: board.lists ?? [] };
+}
 type Update = (board: BoardData) => string | undefined;
 
 const pathname = "household/board-v1.json";
@@ -47,18 +70,23 @@ export function shiftDate(date: string, days: number) {
   return value.toISOString().slice(0, 10);
 }
 
-function upcomingSchedule(entries: ScheduleEntry[], today: string) {
-  // Include yesterday's starts so overnight occurrences ending today appear.
-  const dates = Array.from({ length: 15 }, (_, index) => shiftDate(today, index - 1));
+export function scheduleInRange(entries: ScheduleEntry[], first: string, last?: string) {
+  const through = last ?? shiftDate(first, 13);
+  const dates: string[] = [];
+  // Include yesterday's starts so overnight occurrences ending on the first day appear.
+  for (let date = shiftDate(first, -1); date <= through; date = shiftDate(date, 1)) dates.push(date);
+
   return entries.flatMap((entry) => {
-    if (!entry.repeat_on?.length) return entry.ends_at.slice(0, 10) >= today ? [entry] : [];
     const firstDay = entry.starts_at.slice(0, 10);
+    if (!entry.repeat_on?.length) {
+      return entry.ends_at.slice(0, 10) >= first && (!last || firstDay <= last) ? [entry] : [];
+    }
     const overnight = entry.ends_at.slice(0, 10) > firstDay;
     return dates.flatMap((day) => {
       const weekday = new Date(`${day}T12:00:00Z`).getUTCDay();
       if (day < firstDay || !entry.repeat_on?.includes(weekday)) return [];
       const end = overnight ? shiftDate(day, 1) : day;
-      if (end < today) return [];
+      if (end < first) return [];
       return [{ ...entry, starts_at: day + entry.starts_at.slice(10), ends_at: end + entry.ends_at.slice(10) }];
     });
   }).sort((a, b) => a.starts_at.localeCompare(b.starts_at));
@@ -68,6 +96,8 @@ function demoBoard(timeZone: string): BoardData {
   const today = householdDate(timeZone);
   const nextDay = shiftDate(today, 1);
   return {
+    events: [],
+    lists: [],
     groceries: [
       { id: randomUUID(), name: "Oat milk", quantity: "2 cartons", status: "buy", claimed_by: null },
       { id: randomUUID(), name: "Eggs", quantity: "1 dozen", status: "buy", claimed_by: "jordan" },
@@ -88,7 +118,7 @@ function demoBoard(timeZone: string): BoardData {
 
 async function readDemo(timeZone: string) {
   try {
-    return JSON.parse(await readFile(demoFile, "utf8")) as BoardData;
+    return parseBoard(JSON.parse(await readFile(demoFile, "utf8")));
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
     await mkdir(".data", { recursive: true });
@@ -99,7 +129,7 @@ async function readDemo(timeZone: string) {
       await link(temporary, demoFile);
     } catch (error) {
       if ((error as NodeJS.ErrnoException).code !== "EEXIST") throw error;
-      return JSON.parse(await readFile(demoFile, "utf8")) as BoardData;
+      return parseBoard(JSON.parse(await readFile(demoFile, "utf8")));
     } finally {
       await unlink(temporary);
     }
@@ -114,9 +144,9 @@ async function readProduction() {
     headers: { "Accept-Encoding": "identity" },
     abortSignal: AbortSignal.timeout(10_000),
   });
-  if (!result) return { board: { groceries: [], chores: [], schedule: [] } as BoardData };
+  if (!result) return { board: { groceries: [], chores: [], schedule: [], events: [], lists: [] } as BoardData };
   if (result.statusCode !== 200) throw new Error("Unexpected Blob response.");
-  const board = await new Response(result.stream).json() as BoardData;
+  const board = parseBoard(await new Response(result.stream).json());
   // Blob's CDN can prefix the stored ETag with W/ for compressed GETs.
   // Its conditional write endpoint expects the original strong tag.
   const etag = result.blob.etag.replace(/^W\//, "");
@@ -124,13 +154,16 @@ async function readProduction() {
   return { board, etag };
 }
 
-export async function loadBoard(timeZone: string) {
+export async function loadBoard(timeZone: string, calendarRange?: { first: string; last: string }) {
   const board = demoMode ? await readDemo(timeZone) : (await readProduction()).board;
   const today = householdDate(timeZone);
   return {
     groceries: board.groceries,
     chores: [...board.chores].sort((a, b) => (a.due_on ?? "9999").localeCompare(b.due_on ?? "9999")),
-    schedule: upcomingSchedule(board.schedule, today),
+    schedule: scheduleInRange(board.schedule, today),
+    calendarSchedule: calendarRange ? scheduleInRange(board.schedule, calendarRange.first, calendarRange.last) : [],
+    events: board.events,
+    lists: board.lists,
     weeklySchedule: board.schedule.filter((entry) => entry.repeat_on?.length),
     pastSchedule: board.schedule.filter((entry) => !entry.repeat_on?.length && entry.ends_at.slice(0, 10) < today)
       .sort((a, b) => b.starts_at.localeCompare(a.starts_at)),

@@ -1,14 +1,18 @@
-import { CalendarDays, Check, ChevronDown, Clock3, CircleDollarSign, House, ListChecks,
+import { CalendarDays, Check, ChevronDown, ClipboardList, Clock3, CircleDollarSign, House, ListChecks,
   LogOut, Plus, ShoppingBasket, Trash2, Users, X } from "lucide-react";
 import Link from "next/link";
-import type { Chore, Grocery, ScheduleEntry } from "../lib/data";
+import type { Chore, Grocery, ScheduleEntry, loadBoard } from "../lib/data";
+import type { calendarWindow } from "../lib/calendar";
+import { CalendarBoard } from "./calendar-board";
+import { ListsBoard } from "./lists-board";
 import { logout, updateBoard } from "./actions";
 import { ActionForm, RefreshBoard, Submit } from "./forms";
 
 const sections = {
   groceries: { name: "Groceries", icon: ShoppingBasket, description: "Keep track of groceries, stock to maintain, and what needs to go." },
   chores: { name: "Chores", icon: ListChecks, description: "Assign work, check it off, and keep track of payouts." },
-  schedule: { name: "Schedule", icon: CalendarDays, description: "Let everyone know when you’ll be home or away." },
+  calendar: { name: "Calendar", icon: CalendarDays, description: "See events, birthdays, and when everyone will be home or away." },
+  lists: { name: "Lists", icon: ClipboardList, description: "Keep shared checklists for errands, trips, and household tasks." },
 };
 
 const groceryGroups = {
@@ -26,7 +30,7 @@ const choreGroups = {
 export type Section = keyof typeof sections;
 type Person = { id: string; name: string };
 type Viewer = Person & { manager: boolean };
-type Data = { groceries: Grocery[]; chores: Chore[]; schedule: ScheduleEntry[]; weeklySchedule: ScheduleEntry[]; pastSchedule: ScheduleEntry[] };
+type Data = Awaited<ReturnType<typeof loadBoard>>;
 
 const weekdays = [
   { id: 1, label: "Mon" }, { id: 2, label: "Tue" }, { id: 3, label: "Wed" },
@@ -244,7 +248,7 @@ function ScheduleBoard({ items, weekly, past, people, member, timeZone, today }:
   const days = Map.groupBy(items, (item) => item.starts_at.slice(0, 10));
   return <>
     <div className="section-head">
-      <div><h2>Home and away</h2><p>Schedule times use {timeZone.replaceAll("_", " ")}.</p></div>
+      <div><h2 id="availability">Home and away</h2><p>Schedule times use {timeZone.replaceAll("_", " ")}.</p></div>
       <QuickForm intent="schedule-add" title="Add schedule">
         <ScheduleFields today={today} />
       </QuickForm>
@@ -287,14 +291,15 @@ function ScheduleBoard({ items, weekly, past, people, member, timeZone, today }:
   </>;
 }
 
-export function Board({ section, data, member, people, currency, timeZone, date, demo }: {
-  section: Section; data: Data; member: Viewer; people: Person[]; currency: string; timeZone: string; date: string; demo: boolean;
+export function Board({ section, data, member, people, currency, timeZone, date, calendar, demo }: {
+  section: Section; data: Data; member: Viewer; people: Person[]; currency: string; timeZone: string; date: string; calendar: ReturnType<typeof calendarWindow>; demo: boolean;
 }) {
   const totals = {
     groceries: [data.groceries.filter((item) => item.status === "buy").length, "Groceries to buy"],
     chores: [data.chores.filter((item) => item.status === "open").length, "Open chores"],
-    schedule: [data.schedule.filter((item) => item.starts_at.slice(0, 10) <= date && item.ends_at.slice(0, 10) >= date).length, "Schedule entries today"],
+    calendar: [data.schedule.filter((item) => item.starts_at.slice(0, 10) <= date && item.ends_at.slice(0, 10) >= date).length, "Schedule entries today"],
   };
+  const SectionIcon = sections[section].icon;
   const today = new Intl.DateTimeFormat("en-US", { dateStyle: "full", timeZone: "UTC" }).format(new Date(`${date}T12:00:00Z`));
   return <div className="app-shell">
     <RefreshBoard />
@@ -319,11 +324,10 @@ export function Board({ section, data, member, people, currency, timeZone, date,
       <div className="workspace-content">
         <header className="welcome">
           <div><h1>{sections[section].name}</h1><p>{sections[section].description}</p></div>
-          <div className="welcome-icon" aria-hidden="true">{section === "groceries" ? <ShoppingBasket />
-            : section === "chores" ? <ListChecks /> : <CalendarDays />}</div>
+          <div className="welcome-icon" aria-hidden="true"><SectionIcon /></div>
         </header>
         <div className="overview">
-          {(Object.keys(sections) as Section[]).map((key) => {
+          {(Object.keys(totals) as (keyof typeof totals)[]).map((key) => {
             const Icon = sections[key].icon;
             return <Link className="stat" key={key} href={key === "groceries" ? "/" : `/?section=${key}`}>
               <span className={`stat-icon ${key}`}><Icon size={21} /></span>
@@ -333,7 +337,11 @@ export function Board({ section, data, member, people, currency, timeZone, date,
         </div>
         {section === "groceries" && <GroceryBoard items={data.groceries} member={member} people={people} />}
         {section === "chores" && <ChoreBoard items={data.chores} member={member} people={people} currency={currency} />}
-        {section === "schedule" && <ScheduleBoard items={data.schedule} weekly={data.weeklySchedule} past={data.pastSchedule.filter((entry) => entry.member_id === member.id)} member={member} people={people} timeZone={timeZone} today={date} />}
+        {section === "calendar" && <>
+          <CalendarBoard window={calendar} today={date} events={data.events} schedule={data.calendarSchedule} people={people} />
+          <ScheduleBoard items={data.schedule} weekly={data.weeklySchedule} past={data.pastSchedule.filter((entry) => entry.member_id === member.id)} member={member} people={people} timeZone={timeZone} today={date} />
+        </>}
+        {section === "lists" && <ListsBoard lists={data.lists} />}
       </div>
     </main>
   </div>;

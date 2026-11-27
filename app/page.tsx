@@ -1,6 +1,7 @@
 import { LockKeyhole } from "lucide-react";
 import { demoMode, getConfig } from "../lib/config";
 import { householdDate, loadBoard } from "../lib/data";
+import { calendarWindow } from "../lib/calendar";
 import { currentMember, memberInvite } from "../lib/session";
 import { Board, Brand, Unavailable, type Section } from "./board";
 import { enterAccessCode } from "./actions";
@@ -8,7 +9,7 @@ import { ActionForm, Submit } from "./forms";
 
 export const dynamic = "force-dynamic";
 
-export default async function Home({ searchParams }: { searchParams: Promise<{ section?: string }> }) {
+export default async function Home({ searchParams }: { searchParams: Promise<{ section?: string; day?: string }> }) {
   const config = getConfig();
   if (!config) return <Unavailable setup />;
   const member = await currentMember();
@@ -17,7 +18,7 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ s
       <Brand />
       <span className="auth-symbol"><LockKeyhole size={26} /></span>
       <h1>Welcome home</h1>
-      <p>Enter your personal code to open groceries, chores and schedules.</p>
+      <p>Enter your personal code to open your household board.</p>
       <ActionForm action={enterAccessCode} className="entry-form">
         <label>Access code
           <input name="code" placeholder="XXXX-XXXX-XXXX" autoCapitalize="characters"
@@ -33,16 +34,18 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ s
     </div>
   </main>;
 
-  const { section } = await searchParams;
-  const active: Section = section === "chores" || section === "schedule" ? section : "groceries";
-  const data = await loadBoard(config.timeZone).catch((error: unknown) => {
+  const { section, day } = await searchParams;
+  const active: Section = section === "schedule" ? "calendar"
+    : section === "chores" || section === "calendar" || section === "lists" ? section : "groceries";
+  const date = householdDate(config.timeZone);
+  const calendar = calendarWindow(date, active === "calendar" && typeof day === "string" ? day : undefined);
+  const data = await loadBoard(config.timeZone, active === "calendar" ? calendar : undefined).catch((error: unknown) => {
     console.error("Couldn’t load household data", error instanceof Error ? error.name : "");
     return null;
   });
   if (!data) return <Unavailable />;
 
-  const date = householdDate(config.timeZone);
   return <Board section={active} data={data} member={member}
     people={config.members.map(({ id, name }) => ({ id, name }))}
-    date={date} currency={config.currency} timeZone={config.timeZone} demo={demoMode} />;
+    date={date} calendar={calendar} currency={config.currency} timeZone={config.timeZone} demo={demoMode} />;
 }

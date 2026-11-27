@@ -49,7 +49,25 @@ const scheduleFields = {
   note: z.string().trim().max(100),
 };
 
+const eventFields = {
+  title: name,
+  kind: z.enum(["event", "birthday"]),
+  date: scheduleDate,
+  time: z.union([z.literal(""), scheduleTime]),
+  note: z.string().trim().max(100),
+};
+
 const task = z.discriminatedUnion("intent", [
+  z.object({ intent: z.literal("calendar-add"), ...eventFields }),
+  z.object({ intent: z.literal("calendar-edit"), id, ...eventFields }),
+  z.object({ intent: z.literal("calendar-remove"), id }),
+  z.object({ intent: z.literal("list-add"), title: name }),
+  z.object({ intent: z.literal("list-rename"), id, title: name }),
+  z.object({ intent: z.literal("list-remove"), id }),
+  z.object({ intent: z.literal("list-item-add"), id, label: name }),
+  z.object({ intent: z.literal("list-item-edit"), id, itemId: id, label: name }),
+  z.object({ intent: z.literal("list-item-check"), id, itemId: id, checked: z.enum(["yes", "no"]) }),
+  z.object({ intent: z.literal("list-item-remove"), id, itemId: id }),
   z.object({ intent: z.literal("grocery-add"), name, quantity: z.string().trim().max(40), status: groceryStatus }),
   z.object({ intent: z.literal("grocery-edit"), id, name, quantity: z.string().trim().max(40), status: groceryStatus }),
   z.object({ intent: z.enum(["grocery-claim", "grocery-release", "grocery-delete"]), id }),
@@ -107,6 +125,47 @@ export async function updateBoard(_: FormResult, form: FormData): Promise<FormRe
       }
       const stale = "This entry changed. Refresh the board and try again.";
       switch (input.intent) {
+        case "calendar-add":
+        case "calendar-edit": {
+          const event = input.intent === "calendar-edit" ? board.events.find((row) => row.id === input.id) : undefined;
+          if (input.intent === "calendar-edit" && !event) return stale;
+          const details = { title: input.title, kind: input.kind,
+            date: input.kind === "birthday" ? input.date.slice(5) : input.date,
+            time: input.kind === "birthday" ? "" : input.time, note: input.note };
+          if (event) Object.assign(event, details);
+          else board.events.push({ id: randomUUID(), ...details });
+          break;
+        }
+        case "calendar-remove":
+          if (!board.events.some((event) => event.id === input.id)) return stale;
+          board.events = board.events.filter((event) => event.id !== input.id);
+          break;
+        case "list-add":
+          board.lists.push({ id: randomUUID(), title: input.title, items: [] });
+          break;
+        case "list-rename":
+        case "list-remove":
+        case "list-item-add":
+        case "list-item-edit":
+        case "list-item-check":
+        case "list-item-remove": {
+          const list = board.lists.find((row) => row.id === input.id);
+          if (!list) return stale;
+          if (input.intent === "list-rename") list.title = input.title;
+          else if (input.intent === "list-remove") {
+            if (list.items.length) return "Remove the items before deleting this list.";
+            board.lists = board.lists.filter((row) => row.id !== list.id);
+          } else if (input.intent === "list-item-add") {
+            list.items.push({ id: randomUUID(), label: input.label, checked: false });
+          } else {
+            const item = list.items.find((row) => row.id === input.itemId);
+            if (!item) return stale;
+            if (input.intent === "list-item-edit") item.label = input.label;
+            else if (input.intent === "list-item-check") item.checked = input.checked === "yes";
+            else list.items = list.items.filter((row) => row.id !== item.id);
+          }
+          break;
+        }
         case "grocery-add":
           board.groceries.unshift({ id: randomUUID(), name: input.name, quantity: input.quantity,
             status: input.status, claimed_by: null });
