@@ -1,8 +1,8 @@
 import { LockKeyhole } from "lucide-react";
-import { demoMode, getConfig } from "../lib/config";
+import { demoMode } from "../lib/config";
 import { householdDate, loadBoard } from "../lib/data";
 import { calendarWindow } from "../lib/calendar";
-import { currentMember, memberInvite } from "../lib/session";
+import { currentMember, memberInvite, currentConfig } from "../lib/session";
 import { Board, Brand, Unavailable, type Section } from "./board";
 import { enterAccessCode } from "./actions";
 import { ActionForm, Submit } from "./forms";
@@ -10,7 +10,7 @@ import { ActionForm, Submit } from "./forms";
 export const dynamic = "force-dynamic";
 
 export default async function Home({ searchParams }: { searchParams: Promise<{ section?: string; day?: string }> }) {
-  const config = getConfig();
+  const config = await currentConfig();
   if (!config) return <Unavailable setup />;
   const member = await currentMember();
   if (!member) return <main className="auth-page">
@@ -22,11 +22,12 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ s
       <ActionForm action={enterAccessCode} className="entry-form">
         <label>Access code
           <input name="code" placeholder="XXXX-XXXX-XXXX" autoCapitalize="characters"
-            autoComplete="off" spellCheck={false} maxLength={32} required />
+            autoComplete="off" spellCheck={false} maxLength={48} required />
         </label>
         <Submit>Open household board</Submit>
       </ActionForm>
       <p className="share-note">Your personal invite link also opens the board.</p>
+      {!demoMode && <a className="button secondary" href="/create">Create a household</a>}
       {demoMode && <div className="demo-access"><h2>Try a demo profile</h2>
         {config.members.map((person) => <a className="button secondary" key={person.id}
           href={`/join#${memberInvite(person.id, config.secret)}`}>{person.name}</a>)}

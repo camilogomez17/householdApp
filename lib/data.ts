@@ -4,6 +4,7 @@ import { BlobPreconditionFailedError, get, put } from "@vercel/blob";
 import { randomUUID } from "node:crypto";
 import { link, mkdir, readFile, rename, unlink, writeFile } from "node:fs/promises";
 import { demoMode } from "./config";
+import { currentMember } from "./session";
 
 export type MealSlot = "breakfast" | "lunch" | "dinner";
 export type MealProposal = { id: string; title: string; suggested_by: string; ingredients: string[]; votes: string[] };
@@ -159,7 +160,7 @@ async function readDemo(timeZone: string) {
   }
 }
 
-async function readProduction() {
+async function readProduction(pathname: string) {
   const result = await get(pathname, {
     access: "private",
     useCache: false,
@@ -177,7 +178,10 @@ async function readProduction() {
 }
 
 export async function loadBoard(timeZone: string, calendarRange?: { first: string; last: string }) {
-  const board = demoMode ? await readDemo(timeZone) : (await readProduction()).board;
+  const member = await currentMember();
+  if (!member) throw new Error("Unauthorized");
+  const path = member.householdId ? `households/${member.householdId}/board-v1.json` : pathname;
+  const board = demoMode && !member.householdId ? await readDemo(timeZone) : (await readProduction(path)).board;
   const today = householdDate(timeZone);
   return {
     groceries: board.groceries,
@@ -196,7 +200,10 @@ export async function loadBoard(timeZone: string, calendarRange?: { first: strin
 }
 
 export async function updateData(timeZone: string, update: Update) {
-  if (demoMode) {
+  const member = await currentMember();
+  if (!member) throw new Error("Unauthorized");
+  const path = member.householdId ? `households/${member.householdId}/board-v1.json` : pathname;
+  if (demoMode && !member.householdId) {
     const pending = (local.householdWrite ?? Promise.resolve()).catch(() => {}).then(async () => {
       const board = await readDemo(timeZone);
       const error = update(board);
@@ -210,18 +217,18 @@ export async function updateData(timeZone: string, update: Update) {
   }
 
   for (let attempt = 0; attempt < 4; attempt++) {
-    const { board, etag } = await readProduction();
+    const { board, etag } = await readProduction(path);
     const error = update(board);
     if (error) return error;
     try {
-      await put(pathname, JSON.stringify(board), {
+      await put(path, JSON.stringify(board), {
         access: "private", contentType: "application/json",
         addRandomSuffix: false, allowOverwrite: Boolean(etag), ifMatch: etag,
       });
       return;
     } catch (error) {
       if (error instanceof BlobPreconditionFailedError) continue;
-      if (!etag && (await readProduction()).etag) continue;
+      if (!etag && (await readProduction(path)).etag) continue;
       throw error;
     }
   }

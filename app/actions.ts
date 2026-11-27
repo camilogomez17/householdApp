@@ -8,7 +8,7 @@ import { randomUUID } from "node:crypto";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { z } from "zod";
-import { getConfig } from "../lib/config";
+import { currentConfig } from "../lib/session";
 import { nextBirthday } from "../lib/calendar";
 import { householdDate, shiftDate, updateData } from "../lib/data";
 import { currentMember, signIn, signInWithCode, signOut } from "../lib/session";
@@ -103,7 +103,7 @@ const task = z.discriminatedUnion("intent", [
 
 export async function updateBoard(_: FormResult, form: FormData): Promise<FormResult> {
   const member = await currentMember();
-  const config = getConfig();
+  const config = await currentConfig();
   if (!member || !config) return { error: "Sign in again to update the board." };
 
   const fields = Object.fromEntries(form);
