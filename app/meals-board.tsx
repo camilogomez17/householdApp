@@ -3,6 +3,7 @@ import type { Grocery, MealPlan, MealSlot } from "../lib/data";
 import { shiftDate } from "../lib/data";
 import { updateBoard } from "./actions";
 import { ActionForm, Submit } from "./forms";
+import { MealSuggestions } from "./meal-suggestions";
 
 type Person = { id: string; name: string };
 type Member = Person & { manager: boolean };
@@ -94,14 +95,7 @@ export function MealsBoard({ meals, groceries, people, member, today }: {
                   <ActionForm action={updateBoard} intent="meal-propose" className="entry-form" feedback>
                     <input type="hidden" name="date" value={day} />
                     <input type="hidden" name="slot" value={slot} />
-                    <label>Dish<input name="title" placeholder="e.g. Chicken and rice" maxLength={80} required /></label>
-                    <fieldset className="meal-ingredients">
-                      <legend>In-stock ingredients</legend>
-                      {stock.length ? stock.map((item) => <label key={item.id}>
-                        <input type="checkbox" name="ingredientId" value={item.id} />
-                        <span>{item.name}{item.quantity && <small> · {item.quantity}</small>}</span>
-                      </label>) : <p className="item-meta">No items in Maintain stock. <a href="/">Update groceries</a> first.</p>}
-                    </fieldset>
+                    <MealSuggestions stock={stock} />
                     <Submit>Suggest meal</Submit>
                   </ActionForm>
                 </details>}

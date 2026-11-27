@@ -60,7 +60,7 @@ const eventFields = {
 
 const mealSlot = z.enum(["breakfast", "lunch", "dinner"]);
 const mealDate = z.iso.date().refine((value) => value.startsWith("20"));
-const mealIngredients = z.array(z.uuid()).max(30);
+const mealIngredients = z.array(z.uuid()).min(1).max(30);
 
 const task = z.discriminatedUnion("intent", [
   z.object({ intent: z.literal("meal-propose"), date: mealDate, slot: mealSlot, title: name, ingredientIds: mealIngredients }),
