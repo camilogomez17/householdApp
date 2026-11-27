@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import type { MealPlan, MealSlot } from "../lib/data";
+import type { Grocery, MealPlan, MealSlot } from "../lib/data";
 import { shiftDate } from "../lib/data";
 import { updateBoard } from "./actions";
 import { ActionForm, Submit } from "./forms";
@@ -17,9 +17,10 @@ function Action({ intent, id, proposalId, children }: {
   </ActionForm>;
 }
 
-export function MealsBoard({ meals, people, member, today }: {
-  meals: MealPlan[]; people: Person[]; member: Member; today: string;
+export function MealsBoard({ meals, groceries, people, member, today }: {
+  meals: MealPlan[]; groceries: Grocery[]; people: Person[]; member: Member; today: string;
 }) {
+  const stock = groceries.filter((item) => item.status === "maintain").sort((a, b) => a.name.localeCompare(b.name));
   const weekday = new Date(`${today}T12:00:00Z`).getUTCDay();
   const monday = shiftDate(today, -((weekday + 6) % 7));
   const weeks = [0, 7].map((offset) => shiftDate(monday, offset));
@@ -94,7 +95,13 @@ export function MealsBoard({ meals, people, member, today }: {
                     <input type="hidden" name="date" value={day} />
                     <input type="hidden" name="slot" value={slot} />
                     <label>Dish<input name="title" placeholder="e.g. Chicken and rice" maxLength={80} required /></label>
-                    <label>Ingredients (comma-separated)<input name="ingredients" placeholder="e.g. Chicken, rice, onions" maxLength={800} /></label>
+                    <fieldset className="meal-ingredients">
+                      <legend>In-stock ingredients</legend>
+                      {stock.length ? stock.map((item) => <label key={item.id}>
+                        <input type="checkbox" name="ingredientId" value={item.id} />
+                        <span>{item.name}{item.quantity && <small> · {item.quantity}</small>}</span>
+                      </label>) : <p className="item-meta">No items in Maintain stock. <a href="/">Update groceries</a> first.</p>}
+                    </fieldset>
                     <Submit>Suggest meal</Submit>
                   </ActionForm>
                 </details>}
@@ -104,6 +111,6 @@ export function MealsBoard({ meals, people, member, today }: {
         </section>)}
       </div>
     </details>)}
-    <p className="item-meta">Suggestions and votes are shared with the household. Adding ingredients does not automatically purchase or reserve groceries.</p>
+    <p className="item-meta">Suggestions and votes are shared with the household. Ingredients are selected from Maintain stock. Selection does not reserve or deduct quantities.</p>
   </section>;
 }

@@ -60,10 +60,10 @@ const eventFields = {
 
 const mealSlot = z.enum(["breakfast", "lunch", "dinner"]);
 const mealDate = z.iso.date().refine((value) => value.startsWith("20"));
-const mealIngredients = z.string().trim().max(800);
+const mealIngredients = z.array(z.uuid()).max(30);
 
 const task = z.discriminatedUnion("intent", [
-  z.object({ intent: z.literal("meal-propose"), date: mealDate, slot: mealSlot, title: name, ingredients: mealIngredients }),
+  z.object({ intent: z.literal("meal-propose"), date: mealDate, slot: mealSlot, title: name, ingredientIds: mealIngredients }),
   z.object({ intent: z.literal("meal-vote"), id, proposalId: id }),
   z.object({ intent: z.literal("meal-unvote"), id, proposalId: id }),
   z.object({ intent: z.literal("meal-availability"), id, availability: z.enum(["yes", "maybe", "no"]) }),
@@ -120,7 +120,7 @@ export async function updateBoard(_: FormResult, form: FormData): Promise<FormRe
     fields.ends = `${end.data}T${endTime.data}`;
   }
 
-  const parsed = task.safeParse(fields);
+  const parsed = task.safeParse(fields.intent === "meal-propose" ? { ...fields, ingredientIds: form.getAll("ingredientId") } : fields);
   if (!parsed.success) {
     if (scheduleForm) return { error: "Check the date, both times, and the note (100 characters maximum)." };
     if (fields.intent === "calendar-add" || fields.intent === "calendar-edit") {
@@ -157,7 +157,10 @@ export async function updateBoard(_: FormResult, form: FormData): Promise<FormRe
         case "meal-propose": {
           const today = householdDate(config.timeZone);
           if (input.date < today || input.date > shiftDate(today, 90)) return "Choose a meal date within the next 90 days.";
-          const ingredients = [...new Set(input.ingredients.split(/[\n,]/).map((part) => part.trim()).filter(Boolean))].slice(0, 30);
+          const selectedIds = [...new Set(input.ingredientIds)];
+          const selected = board.groceries.filter((item) => item.status === "maintain" && selectedIds.includes(item.id));
+          if (selected.length !== selectedIds.length) return "Some ingredients are no longer in stock. Refresh and choose again.";
+          const ingredients = selected.map((item) => item.name);
           let slot = board.meals.find((row) => row.date === input.date && row.slot === input.slot);
           if (!slot) {
             slot = { id: randomUUID(), date: input.date, slot: input.slot, proposals: [],
