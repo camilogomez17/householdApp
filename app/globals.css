@@ -219,3 +219,7 @@ summary::-webkit-details-marker { display: none; }
 .repeat-days > div { display: flex; flex-wrap: wrap; gap: 6px 12px; }
 .entry-form .repeat-days label { display: inline-flex; align-items: center; gap: 5px; padding-block: 4px; }
 .entry-form .repeat-days input[type="checkbox"] { width: 17px; min-height: 17px; margin: 0; accent-color: var(--forest); }
+
+.past-schedule { margin-top: 14px; }
+.past-schedule > summary { justify-content: space-between; font-weight: 650; }
+.past-schedule:not([open]) > summary { border-bottom: 0; }

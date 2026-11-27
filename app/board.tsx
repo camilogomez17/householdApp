@@ -26,7 +26,7 @@ const choreGroups = {
 export type Section = keyof typeof sections;
 type Person = { id: string; name: string };
 type Viewer = Person & { manager: boolean };
-type Data = { groceries: Grocery[]; chores: Chore[]; schedule: ScheduleEntry[]; weeklySchedule: ScheduleEntry[] };
+type Data = { groceries: Grocery[]; chores: Chore[]; schedule: ScheduleEntry[]; weeklySchedule: ScheduleEntry[]; pastSchedule: ScheduleEntry[] };
 
 const weekdays = [
   { id: 1, label: "Mon" }, { id: 2, label: "Tue" }, { id: 3, label: "Wed" },
@@ -54,11 +54,11 @@ function Formatters(currency: string) {
 const memberName = (people: Person[], id: string | null) =>
   id ? people.find((person) => person.id === id)?.name ?? "Former member" : "Unassigned";
 
-function MemberSelect({ people, value = "" }: { people: Person[]; value?: string }) {
-  return <select name="assignee" defaultValue={value}>
-    <option value="">Unassigned</option>
+function MemberSelect({ people, value = "", required = false }: { people: Person[]; value?: string; required?: boolean }) {
+  return <select name="assignee" defaultValue={value} required={required}>
+    <option value="" disabled={required}>{required ? "Choose a member" : "Unassigned"}</option>
     {people.map((person) => <option key={person.id} value={person.id}>{person.name}</option>)}
-    {value && !people.some((person) => person.id === value) && <option value={value} disabled>Former member</option>}
+    {value && !people.some((person) => person.id === value) && <option value={value}>Former member</option>}
   </select>;
 }
 
@@ -68,6 +68,18 @@ function QuickForm({ children, intent, title }: { children: React.ReactNode; int
     <ActionForm action={updateBoard} intent={intent} className="entry-form" feedback>
       {children}
       <Submit>Save entry</Submit>
+    </ActionForm>
+  </details>;
+}
+
+function EditForm({ id, intent, children, title = "Edit" }: {
+  id: string; intent: string; children: React.ReactNode; title?: string;
+}) {
+  return <details className="edit-form">
+    <summary>{title} <ChevronDown size={14} /></summary>
+    <ActionForm id={id} action={updateBoard} intent={intent} className="entry-form" feedback>
+      {children}
+      <Submit variant="secondary">Save changes</Submit>
     </ActionForm>
   </details>;
 }
@@ -83,7 +95,7 @@ function ItemAction({ id, intent, label, assignee, variant = "plain" }: {
 
 function GroceryFields({ item }: { item?: Grocery }) {
   return <>
-    {!item && <label>Item<input name="name" placeholder="e.g. Oat milk" maxLength={80} required /></label>}
+    <label>Item<input name="name" placeholder="e.g. Oat milk" defaultValue={item?.name} maxLength={80} required /></label>
     <label>Quantity or target<input name="quantity" placeholder="e.g. 2 cartons" defaultValue={item?.quantity} maxLength={40} /></label>
     <label>List<select name="status" defaultValue={item?.status ?? "buy"}>
       <option value="buy">To buy</option><option value="maintain">Maintain stock</option><option value="remove">Remove</option>
@@ -116,12 +128,7 @@ function GroceryBoard({ items, member, people }: { items: Grocery[]; member: Vie
                   ? <ItemAction id={item.id} intent="grocery-claim" label="Claim" />
                   : item.claimed_by === member.id && <ItemAction id={item.id} intent="grocery-release" label="Release" />)}
                 {status === "remove" && <ItemAction id={item.id} intent="grocery-delete" label="Clear item" variant="danger" />}
-                <details className="edit-form">
-                  <summary>Edit <ChevronDown size={14} /></summary>
-                  <ActionForm id={item.id} action={updateBoard} intent="grocery-edit" className="entry-form" feedback>
-                    <GroceryFields item={item} /><Submit variant="secondary">Save changes</Submit>
-                  </ActionForm>
-                </details>
+                <EditForm id={item.id} intent="grocery-edit"><GroceryFields item={item} /></EditForm>
               </div>
             </li>)}
           </ul>
@@ -132,17 +139,29 @@ function GroceryBoard({ items, member, people }: { items: Grocery[]; member: Vie
   </>;
 }
 
+function ChoreFields({ item, member, people, currency }: {
+  item?: Chore; member: Viewer; people: Person[]; currency: string;
+}) {
+  return <>
+    <label>Chore<input name="name" placeholder="e.g. Clean the kitchen" defaultValue={item?.name} maxLength={80} required /></label>
+    {(member.manager || !item) && <label>Assign to<MemberSelect people={member.manager ? people : [member]}
+      value={item?.assignee ?? ""} required={Boolean(item && item.status !== "open")} /></label>}
+    <label>Due date<input name="due" type="date" defaultValue={item?.due_on ?? ""} /></label>
+    {member.manager ? <label>{item?.status === "paid" ? "Amount paid" : "Reward"} ({currency})
+      <input name="reward" type="number" min={item?.status === "paid" ? "0.01" : "0"} max="10000"
+        step="0.01" placeholder="0.00" defaultValue={item ? (item.reward_cents / 100).toFixed(2) : undefined}
+        required={item?.status === "paid"} />
+    </label> : !item && <input type="hidden" name="reward" value="0" />}
+  </>;
+}
+
 function ChoreBoard({ items, member, people, currency }: { items: Chore[]; member: Viewer; people: Person[]; currency: string }) {
   const format = Formatters(currency);
   return <>
     <div className="section-head">
       <div><h2>Chore board</h2><p>Record payouts after the money has been exchanged.</p></div>
       <QuickForm intent="chore-add" title="Add chore">
-        <label>Chore<input name="name" placeholder="e.g. Clean the kitchen" maxLength={80} required /></label>
-        <label>Assign to<MemberSelect people={member.manager ? people : [member]} /></label>
-        <label>Due date<input name="due" type="date" /></label>
-        {member.manager ? <label>Reward ({currency})<input name="reward" type="number" min="0" max="10000" step="0.01" placeholder="0.00" /></label>
-          : <input type="hidden" name="reward" value="0" />}
+        <ChoreFields member={member} people={people} currency={currency} />
       </QuickForm>
     </div>
     <div className="lanes">
@@ -160,13 +179,10 @@ function ChoreBoard({ items, member, people, currency }: { items: Chore[]; membe
             <p className="item-meta">{memberName(people, item.assignee)}{item.due_on && ` · Due ${format.date(item.due_on)}`}</p>
             {item.paid_on && <p className="item-meta">Paid {format.date(item.paid_on)} by {memberName(people, item.paid_by)}</p>}
             <div className="item-actions">
-              {status === "open" && member.manager && <details className="edit-form">
-                <summary>Assign <ChevronDown size={14} /></summary>
-                <ActionForm id={item.id} action={updateBoard} intent="chore-assign" className="entry-form" feedback>
-                  <label>Assign to<MemberSelect people={people} value={item.assignee ?? ""} /></label>
-                  <Submit variant="secondary">Save assignment</Submit>
-                </ActionForm>
-              </details>}
+              {(member.manager || (item.assignee === member.id && status !== "paid")) &&
+                <EditForm id={item.id} intent="chore-edit">
+                  <ChoreFields item={item} member={member} people={people} currency={currency} />
+                </EditForm>}
               {status === "open" && !item.assignee && !member.manager && <ItemAction id={item.id} intent="chore-assign" label="Assign to me" assignee={member.id} />}
               {status === "open" && item.assignee && (member.manager || item.assignee === member.id) && <ItemAction id={item.id} intent="chore-done" label="Mark done" />}
               {status === "open" && member.manager && <ItemAction id={item.id} intent="chore-delete" label="Remove" variant="danger" />}
@@ -181,8 +197,48 @@ function ChoreBoard({ items, member, people, currency }: { items: Chore[]; membe
   </>;
 }
 
-function ScheduleBoard({ items, weekly, people, member, timeZone, today }: {
-  items: ScheduleEntry[]; weekly: ScheduleEntry[]; people: Person[]; member: Viewer; timeZone: string; today: string;
+function ScheduleFields({ today, entry }: { today: string; entry?: ScheduleEntry }) {
+  const startDate = entry?.starts_at.slice(0, 10) ?? today;
+  const endDate = entry?.ends_at.slice(0, 10);
+  return <>
+    <label>Availability<select name="status" defaultValue={entry?.status ?? "home"}><option value="home">Home</option><option value="away">Away</option></select></label>
+    <label>Date<input name="startDate" type="date" defaultValue={startDate} required /></label>
+    <label>Start time<input name="startTime" type="time" defaultValue={entry?.starts_at.slice(11)} required /></label>
+    <label>End time<input name="endTime" type="time" defaultValue={entry?.ends_at.slice(11)} required /></label>
+    <label>End date (only for overnight)<input name="endDate" type="date" defaultValue={endDate !== startDate ? endDate : ""} /></label>
+    <label>Note<input name="note" defaultValue={entry?.note} maxLength={100} placeholder="Optional" /></label>
+    <fieldset className="repeat-days">
+      <legend>Repeat weekly on</legend>
+      <p>Leave all days unchecked for a one-time entry.</p>
+      <div>
+        {weekdays.map(({ id, label }) => <label key={id}>
+          <input type="checkbox" name="repeatDay" value={id} defaultChecked={entry?.repeat_on?.includes(id)} /> {label}
+        </label>)}
+      </div>
+    </fieldset>
+  </>;
+}
+
+function ScheduleRow({ entry, member, people, today }: {
+  entry: ScheduleEntry; member: Viewer; people: Person[]; today: string;
+}) {
+  const date = Formatters("USD");
+  const endDay = entry.ends_at.slice(0, 10) !== entry.starts_at.slice(0, 10);
+  return <li className="item schedule-item">
+    <div className="item-title"><strong>{memberName(people, entry.member_id)}</strong>
+      <span className={`tag ${entry.status === "home" ? "maintain" : "buy"}`}>{entry.status === "home" ? "Home" : "Away"}</span>
+    </div>
+    <p className="item-meta"><Clock3 size={15} />{date.time(entry.starts_at)} – {endDay && `${date.date(entry.ends_at)}, `}{date.time(entry.ends_at)}</p>
+    {entry.note && <p className="item-meta">{entry.note}</p>}
+    {!entry.repeat_on?.length && entry.member_id === member.id && <div className="item-actions">
+      <EditForm id={entry.id} intent="schedule-edit"><ScheduleFields today={today} entry={entry} /></EditForm>
+      <ItemAction id={entry.id} intent="schedule-delete" label="Remove" variant="danger" />
+    </div>}
+  </li>;
+}
+
+function ScheduleBoard({ items, weekly, past, people, member, timeZone, today }: {
+  items: ScheduleEntry[]; weekly: ScheduleEntry[]; past: ScheduleEntry[]; people: Person[]; member: Viewer; timeZone: string; today: string;
 }) {
   const date = Formatters("USD");
   const days = Map.groupBy(items, (item) => item.starts_at.slice(0, 10));
@@ -190,21 +246,7 @@ function ScheduleBoard({ items, weekly, people, member, timeZone, today }: {
     <div className="section-head">
       <div><h2>Home and away</h2><p>Schedule times use {timeZone.replaceAll("_", " ")}.</p></div>
       <QuickForm intent="schedule-add" title="Add schedule">
-        <label>Availability<select name="status"><option value="home">Home</option><option value="away">Away</option></select></label>
-        <label>Date<input name="startDate" type="date" defaultValue={today} required /></label>
-        <label>Start time<input name="startTime" type="time" required /></label>
-        <label>End time<input name="endTime" type="time" required /></label>
-        <label>End date (only for overnight)<input name="endDate" type="date" /></label>
-        <label>Note<input name="note" maxLength={100} placeholder="Optional" /></label>
-        <fieldset className="repeat-days">
-          <legend>Repeat weekly on</legend>
-          <p>Leave all days unchecked for a one-time entry.</p>
-          <div>
-            {weekdays.map(({ id, label }) => <label key={id}>
-              <input type="checkbox" name="repeatDay" value={id} /> {label}
-            </label>)}
-          </div>
-        </fieldset>
+        <ScheduleFields today={today} />
       </QuickForm>
     </div>
     {weekly.length > 0 && <section className="lane weekly-schedule">
@@ -217,23 +259,31 @@ function ScheduleBoard({ items, weekly, people, member, timeZone, today }: {
           {entry.ends_at.slice(0, 10) !== entry.starts_at.slice(0, 10) && " next day"}
         </p>
         {entry.starts_at.slice(0, 10) > today && <p className="item-meta">Starts {date.date(entry.starts_at)}</p>}
-        {entry.member_id === member.id && <div className="item-actions"><ItemAction id={entry.id} intent="schedule-delete" label="Stop repeating" variant="danger" /></div>}
+        {entry.member_id === member.id && <div className="item-actions">
+          <EditForm id={entry.id} intent="schedule-edit" title="Edit weekly schedule"><ScheduleFields today={today} entry={entry} /></EditForm>
+          <ItemAction id={entry.id} intent="schedule-delete" label="Stop repeating" variant="danger" />
+        </div>}
       </li>)}</ul>
     </section>}
     {!days.size && <p className="empty schedule-empty">No upcoming schedules. Add when you’ll be home or away.</p>}
     <div className="schedule-days">
       {[...days].map(([day, entries]) => <section className="lane schedule-day" key={day}>
         <div className="lane-heading"><span className="lane-icon maintain"><CalendarDays size={18} /></span><h3>{date.date(day)}</h3></div>
-        <ul className="items">{entries.map((entry) => <li className="item schedule-item" key={`${entry.id}-${entry.starts_at}`}>
-          <div className="item-title"><strong>{memberName(people, entry.member_id)}</strong>
-            <span className={`tag ${entry.status === "home" ? "maintain" : "buy"}`}>{entry.status === "home" ? "Home" : "Away"}</span>
-          </div>
-          <p className="item-meta"><Clock3 size={15} />{date.time(entry.starts_at)} – {entry.ends_at.slice(0, 10) !== day && `${date.date(entry.ends_at)}, `}{date.time(entry.ends_at)}</p>
-          {entry.note && <p className="item-meta">{entry.note}</p>}
-          {!entry.repeat_on?.length && entry.member_id === member.id && <div className="item-actions"><ItemAction id={entry.id} intent="schedule-delete" label="Remove" variant="danger" /></div>}
-        </li>)}</ul>
+        <ul className="items">{entries.map((entry) =>
+          <ScheduleRow key={`${entry.id}-${entry.starts_at}`} entry={entry} member={member} people={people} today={today} />)}</ul>
       </section>)}
     </div>
+    {past.length > 0 && <details className="lane past-schedule">
+      <summary className="lane-heading">Your past schedules <ChevronDown size={16} /></summary>
+      <div className="schedule-days">
+        {[...Map.groupBy(past, (entry) => entry.starts_at.slice(0, 10))].map(([day, entries]) =>
+          <section key={day}>
+            <h3 className="lane-heading">{date.date(day)}</h3>
+            <ul className="items">{entries.map((entry) =>
+              <ScheduleRow key={entry.id} entry={entry} member={member} people={people} today={today} />)}</ul>
+          </section>)}
+      </div>
+    </details>}
   </>;
 }
 
@@ -283,7 +333,7 @@ export function Board({ section, data, member, people, currency, timeZone, date,
         </div>
         {section === "groceries" && <GroceryBoard items={data.groceries} member={member} people={people} />}
         {section === "chores" && <ChoreBoard items={data.chores} member={member} people={people} currency={currency} />}
-        {section === "schedule" && <ScheduleBoard items={data.schedule} weekly={data.weeklySchedule} member={member} people={people} timeZone={timeZone} today={date} />}
+        {section === "schedule" && <ScheduleBoard items={data.schedule} weekly={data.weeklySchedule} past={data.pastSchedule.filter((entry) => entry.member_id === member.id)} member={member} people={people} timeZone={timeZone} today={date} />}
       </div>
     </main>
   </div>;

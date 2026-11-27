@@ -126,11 +126,14 @@ async function readProduction() {
 
 export async function loadBoard(timeZone: string) {
   const board = demoMode ? await readDemo(timeZone) : (await readProduction()).board;
+  const today = householdDate(timeZone);
   return {
     groceries: board.groceries,
     chores: [...board.chores].sort((a, b) => (a.due_on ?? "9999").localeCompare(b.due_on ?? "9999")),
-    schedule: upcomingSchedule(board.schedule, householdDate(timeZone)),
+    schedule: upcomingSchedule(board.schedule, today),
     weeklySchedule: board.schedule.filter((entry) => entry.repeat_on?.length),
+    pastSchedule: board.schedule.filter((entry) => !entry.repeat_on?.length && entry.ends_at.slice(0, 10) < today)
+      .sort((a, b) => b.starts_at.localeCompare(a.starts_at)),
   };
 }
 

@@ -41,14 +41,24 @@ const scheduleTime = z.iso.time().transform((value) => value.slice(0, 5));
 const dateTime = z.iso.datetime({ local: true })
   .refine((value) => /^20\d\d-\d\d-\d\dT[\d:.]+$/.test(value))
   .transform((value) => value.slice(0, 16));
+const due = z.union([z.literal(""), z.iso.date()]);
+const scheduleFields = {
+  status: z.enum(["home", "away"]),
+  starts: dateTime,
+  ends: dateTime,
+  note: z.string().trim().max(100),
+};
+
 const task = z.discriminatedUnion("intent", [
   z.object({ intent: z.literal("grocery-add"), name, quantity: z.string().trim().max(40), status: groceryStatus }),
-  z.object({ intent: z.literal("grocery-edit"), id, quantity: z.string().trim().max(40), status: groceryStatus }),
+  z.object({ intent: z.literal("grocery-edit"), id, name, quantity: z.string().trim().max(40), status: groceryStatus }),
   z.object({ intent: z.enum(["grocery-claim", "grocery-release", "grocery-delete"]), id }),
-  z.object({ intent: z.literal("chore-add"), name, assignee, reward: taskAmount, due: z.union([z.literal(""), z.iso.date()]) }),
+  z.object({ intent: z.literal("chore-add"), name, assignee, reward: taskAmount, due }),
+  z.object({ intent: z.literal("chore-edit"), id, name, due, assignee: assignee.optional(), reward: taskAmount.optional() }),
   z.object({ intent: z.literal("chore-assign"), id, assignee }),
   z.object({ intent: z.enum(["chore-done", "chore-reopen", "chore-paid", "chore-delete"]), id }),
-  z.object({ intent: z.literal("schedule-add"), status: z.enum(["home", "away"]), starts: dateTime, ends: dateTime, note: z.string().trim().max(100) }),
+  z.object({ intent: z.literal("schedule-add"), ...scheduleFields }),
+  z.object({ intent: z.literal("schedule-edit"), id, ...scheduleFields }),
   z.object({ intent: z.literal("schedule-delete"), id }),
 ]);
 
@@ -58,7 +68,8 @@ export async function updateBoard(_: FormResult, form: FormData): Promise<FormRe
   if (!member || !config) return { error: "Sign in again to update the board." };
 
   const fields = Object.fromEntries(form);
-  if (fields.intent === "schedule-add" && "startDate" in fields) {
+  const scheduleForm = fields.intent === "schedule-add" || fields.intent === "schedule-edit";
+  if (scheduleForm && "startDate" in fields) {
     const start = scheduleDate.safeParse(fields.startDate);
     const end = scheduleDate.safeParse(fields.endDate || fields.startDate);
     const startTime = scheduleTime.safeParse(fields.startTime);
@@ -70,12 +81,12 @@ export async function updateBoard(_: FormResult, form: FormData): Promise<FormRe
   }
 
   const parsed = task.safeParse(fields);
-  if (!parsed.success) return { error: fields.intent === "schedule-add"
+  if (!parsed.success) return { error: scheduleForm
     ? "Check the date, both times, and the note (100 characters maximum)."
     : "Check the fields and try again." };
 
   const input = parsed.data;
-  const repeatDays = input.intent === "schedule-add" ? form.getAll("repeatDay") : [];
+  const repeatDays = scheduleForm ? form.getAll("repeatDay") : [];
   if (repeatDays.length > 7 || repeatDays.some((day) => typeof day !== "string" || !/^[0-6]$/.test(day))) {
     return { error: "Choose valid days for the weekly schedule." };
   }
@@ -88,17 +99,21 @@ export async function updateBoard(_: FormResult, form: FormData): Promise<FormRe
     const error = await updateData(config.timeZone, (board) => {
       const grocery = "id" in input ? board.groceries.find((item) => item.id === input.id) : undefined;
       const chore = "id" in input ? board.chores.find((item) => item.id === input.id) : undefined;
+      if (input.intent === "grocery-add" || input.intent === "grocery-edit") {
+        if (board.groceries.some((item) => item.id !== grocery?.id
+          && item.name.toLowerCase() === input.name.toLowerCase())) {
+          return "That grocery is already on the board.";
+        }
+      }
       const stale = "This entry changed. Refresh the board and try again.";
       switch (input.intent) {
         case "grocery-add":
-          if (board.groceries.some((item) => item.name.toLowerCase() === input.name.toLowerCase())) {
-            return "That grocery is already on the board.";
-          }
           board.groceries.unshift({ id: randomUUID(), name: input.name, quantity: input.quantity,
             status: input.status, claimed_by: null });
           break;
         case "grocery-edit":
           if (!grocery) return stale;
+          grocery.name = input.name;
           grocery.quantity = input.quantity;
           grocery.status = input.status;
           if (input.status !== "buy") grocery.claimed_by = null;
@@ -121,6 +136,23 @@ export async function updateBoard(_: FormResult, form: FormData): Promise<FormRe
           if ((!member.manager && input.reward > 0) || (input.assignee && !canAssign(input.assignee))) return restricted.error;
           board.chores.unshift({ id: randomUUID(), name: input.name, assignee: input.assignee || null,
             reward_cents: input.reward, due_on: input.due || null, status: "open", paid_by: null, paid_on: null });
+          break;
+        case "chore-edit":
+          if (!chore) return stale;
+          if (!member.manager && (chore.assignee !== member.id || chore.status === "paid"
+            || input.assignee !== undefined || input.reward !== undefined)) return restricted.error;
+
+          if (input.assignee !== undefined) {
+            if (input.assignee !== chore.assignee && !canAssign(input.assignee)) return restricted.error;
+            if (chore.status !== "open" && !input.assignee) return "Choose a member for this completed chore.";
+            chore.assignee = input.assignee || null;
+          }
+          if (input.reward !== undefined) {
+            if (chore.status === "paid" && input.reward === 0) return "Enter the amount paid for this chore.";
+            chore.reward_cents = input.reward;
+          }
+          chore.name = input.name;
+          chore.due_on = input.due || null;
           break;
         case "chore-assign":
           if (!canAssign(input.assignee)) return restricted.error;
@@ -146,17 +178,24 @@ export async function updateBoard(_: FormResult, form: FormData): Promise<FormRe
           board.chores = board.chores.filter((item) => item.id !== input.id);
           break;
         case "schedule-add":
+        case "schedule-edit": {
+          const existing = input.intent === "schedule-edit"
+            ? board.schedule.find((entry) => entry.id === input.id && entry.member_id === member.id)
+            : undefined;
+          if (input.intent === "schedule-edit" && !existing) return stale;
           if (input.ends <= input.starts) return "End time must be after the start. If it ends overnight, choose the next day as the end date.";
           if (repeatOn.length) {
             const latestEnd = shiftDate(input.starts.slice(0, 10), 1) + input.starts.slice(10);
             if (input.ends > latestEnd) return "A weekly schedule block can be up to 24 hours long.";
-          } else if (input.ends.slice(0, 10) < householdDate(config.timeZone)) {
+          } else if (!existing && input.ends.slice(0, 10) < householdDate(config.timeZone)) {
             return "This entry ends before today. Choose today or a future date.";
           }
-          board.schedule.push({ id: randomUUID(), member_id: member.id,
-            status: input.status, starts_at: input.starts, ends_at: input.ends, note: input.note,
-            ...(repeatOn.length ? { repeat_on: repeatOn } : {}) });
+          const updated = { status: input.status, starts_at: input.starts, ends_at: input.ends,
+            note: input.note, repeat_on: repeatOn.length ? repeatOn : undefined };
+          if (existing) Object.assign(existing, updated);
+          else board.schedule.push({ id: randomUUID(), member_id: member.id, ...updated });
           break;
+        }
         case "schedule-delete":
           if (!board.schedule.some((entry) => entry.id === input.id && entry.member_id === member.id)) return stale;
           board.schedule = board.schedule.filter((entry) => entry.id !== input.id);
