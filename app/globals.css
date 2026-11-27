@@ -305,3 +305,25 @@ summary::-webkit-details-marker { display: none; }
 }
 
 .one-time-heading { margin: 14px 0 8px; font-size: 1rem; }
+
+.meals-section { display: grid; gap: 16px; }
+.meal-week { min-width: 0; }
+.meal-week-title { padding: 13px 16px; border: 1px solid var(--line); border-radius: 10px; background: var(--white); font-weight: 700; }
+.meal-days { display: grid; gap: 14px; grid-template-columns: repeat(2, minmax(0, 1fr)); margin-top: 14px; }
+.meal-day { min-width: 0; }
+.meal-slots { display: grid; }
+.meal-slot { min-width: 0; padding: 13px 15px; border-top: 1px solid var(--line); }
+.meal-slot:first-child { border-top: 0; }
+.meal-slot-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.meal-slot-head .tag { margin-top: 0; }
+.meal-slot > p { margin-top: 6px; font-size: .88rem; overflow-wrap: anywhere; }
+.meal-proposal { margin-top: 9px; padding: 9px 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--paper); overflow-wrap: anywhere; }
+.meal-proposal small { color: var(--muted); }
+.meal-assignments { margin-top: 10px; display: grid; gap: 6px; }
+.meal-availability-form { display: flex; gap: 8px; align-items: end; flex-wrap: wrap; }
+.meal-availability-form label { display: grid; gap: 4px; font-size: .85rem; font-weight: 650; }
+.meal-availability-form select { min-height: 36px; padding: 5px; border: 1px solid var(--line); border-radius: 7px; background: var(--white); }
+.meal-suggest { margin-top: 10px; }
+.meal-suggest .entry-form { margin-top: 8px; }
+@media (max-width: 850px) { .meal-days { grid-template-columns: 1fr; } .sidebar nav { grid-template-columns: repeat(5, minmax(0, 1fr)); } }
+@media (max-width: 420px) { .sidebar nav a { font-size: .72rem; } .sidebar nav a svg { width: 16px; } }

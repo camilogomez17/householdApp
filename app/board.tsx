@@ -1,11 +1,12 @@
 import { CalendarDays, Check, ChevronDown, ClipboardList, Clock3, CircleDollarSign, House, ListChecks,
-  LogOut, Plus, ShoppingBasket, Trash2, Users, X } from "lucide-react";
+  LogOut, Plus, ShoppingBasket, Trash2, Users, UtensilsCrossed, X } from "lucide-react";
 import Link from "next/link";
 import type { Chore, Grocery, ScheduleEntry, loadBoard } from "../lib/data";
 import type { calendarWindow } from "../lib/calendar";
 import { CalendarBoard } from "./calendar-board";
 import { ScheduleFields, scheduleWeekdays } from "./schedule-fields";
 import { ListsBoard } from "./lists-board";
+import { MealsBoard } from "./meals-board";
 import { logout, updateBoard } from "./actions";
 import { ActionForm, RefreshBoard, Submit } from "./forms";
 
@@ -13,6 +14,7 @@ const sections = {
   groceries: { name: "Groceries", icon: ShoppingBasket, description: "Keep track of groceries, stock to maintain, and what needs to go." },
   chores: { name: "Chores", icon: ListChecks, description: "Assign work, check it off, and keep track of payouts." },
   calendar: { name: "Calendar", icon: CalendarDays, description: "See events, birthdays, and when everyone will be home or away." },
+  meals: { name: "Meals", icon: UtensilsCrossed, description: "Plan meals together, vote, and coordinate cooking." },
   lists: { name: "Lists", icon: ClipboardList, description: "Keep shared checklists for errands, trips, and household tasks." },
 };
 
@@ -316,6 +318,7 @@ export function Board({ section, data, member, people, currency, timeZone, date,
           <ScheduleBoard items={data.schedule} weekly={data.weeklySchedule} past={data.pastSchedule.filter((entry) => entry.member_id === member.id)} member={member} people={people} timeZone={timeZone} today={date} />
         </>}
         {section === "lists" && <ListsBoard lists={data.lists} />}
+        {section === "meals" && <MealsBoard meals={data.meals} people={people} member={member} today={date} />}
       </div>
     </main>
   </div>;

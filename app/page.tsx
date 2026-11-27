@@ -36,7 +36,7 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ s
 
   const { section, day } = await searchParams;
   const active: Section = section === "schedule" ? "calendar"
-    : section === "chores" || section === "calendar" || section === "lists" ? section : "groceries";
+    : section === "chores" || section === "calendar" || section === "lists" || section === "meals" ? section : "groceries";
   const date = householdDate(config.timeZone);
   const calendar = calendarWindow(date, active === "calendar" && typeof day === "string" ? day : undefined);
   const data = await loadBoard(config.timeZone, active === "calendar" ? calendar : undefined).catch((error: unknown) => {

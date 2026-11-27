@@ -3,6 +3,19 @@ import { randomUUID } from "node:crypto";
 import { link, mkdir, readFile, rename, unlink, writeFile } from "node:fs/promises";
 import { demoMode } from "./config";
 
+export type MealSlot = "breakfast" | "lunch" | "dinner";
+export type MealProposal = { id: string; title: string; suggested_by: string; ingredients: string[]; votes: string[] };
+export type MealPlan = {
+  id: string;
+  date: string;
+  slot: MealSlot;
+  proposals: MealProposal[];
+  availability: Record<string, "yes" | "maybe" | "no">;
+  selected_id: string | null;
+  cook_id: string | null;
+  prepared: boolean;
+};
+
 export type Grocery = {
   id: string;
   name: string;
@@ -48,11 +61,12 @@ export type BoardData = {
   schedule: ScheduleEntry[];
   events: CalendarEvent[];
   lists: Checklist[];
+  meals: MealPlan[];
 };
 
 function parseBoard(value: unknown): BoardData {
-  const board = value as Omit<BoardData, "events" | "lists"> & Partial<Pick<BoardData, "events" | "lists">>;
-  return { ...board, events: board.events ?? [], lists: board.lists ?? [] };
+  const board = value as Omit<BoardData, "events" | "lists" | "meals"> & Partial<Pick<BoardData, "events" | "lists" | "meals">>;
+  return { ...board, events: board.events ?? [], lists: board.lists ?? [], meals: board.meals ?? [] };
 }
 type Update = (board: BoardData) => string | undefined;
 
@@ -98,6 +112,7 @@ function demoBoard(timeZone: string): BoardData {
   return {
     events: [],
     lists: [],
+    meals: [],
     groceries: [
       { id: randomUUID(), name: "Oat milk", quantity: "2 cartons", status: "buy", claimed_by: null },
       { id: randomUUID(), name: "Eggs", quantity: "1 dozen", status: "buy", claimed_by: "jordan" },
@@ -144,7 +159,7 @@ async function readProduction() {
     headers: { "Accept-Encoding": "identity" },
     abortSignal: AbortSignal.timeout(10_000),
   });
-  if (!result) return { board: { groceries: [], chores: [], schedule: [], events: [], lists: [] } as BoardData };
+  if (!result) return { board: { groceries: [], chores: [], schedule: [], events: [], lists: [], meals: [] } as BoardData };
   if (result.statusCode !== 200) throw new Error("Unexpected Blob response.");
   const board = parseBoard(await new Response(result.stream).json());
   // Blob's CDN can prefix the stored ETag with W/ for compressed GETs.
@@ -164,6 +179,7 @@ export async function loadBoard(timeZone: string, calendarRange?: { first: strin
     calendarSchedule: calendarRange ? scheduleInRange(board.schedule, calendarRange.first, calendarRange.last) : [],
     events: board.events,
     lists: board.lists,
+    meals: board.meals,
     weeklySchedule: board.schedule.filter((entry) => entry.repeat_on?.length),
     pastSchedule: board.schedule.filter((entry) => !entry.repeat_on?.length && entry.ends_at.slice(0, 10) < today)
       .sort((a, b) => b.starts_at.localeCompare(a.starts_at)),

@@ -58,7 +58,22 @@ const eventFields = {
   note: z.string().trim().max(100),
 };
 
+const mealSlot = z.enum(["breakfast", "lunch", "dinner"]);
+const mealDate = z.iso.date().refine((value) => value.startsWith("20"));
+const mealIngredients = z.string().trim().max(800);
+
 const task = z.discriminatedUnion("intent", [
+  z.object({ intent: z.literal("meal-propose"), date: mealDate, slot: mealSlot, title: name, ingredients: mealIngredients }),
+  z.object({ intent: z.literal("meal-vote"), id, proposalId: id }),
+  z.object({ intent: z.literal("meal-unvote"), id, proposalId: id }),
+  z.object({ intent: z.literal("meal-availability"), id, availability: z.enum(["yes", "maybe", "no"]) }),
+  z.object({ intent: z.literal("meal-volunteer"), id }),
+  z.object({ intent: z.literal("meal-release"), id }),
+  z.object({ intent: z.literal("meal-select"), id, proposalId: id }),
+  z.object({ intent: z.literal("meal-unselect"), id }),
+  z.object({ intent: z.literal("meal-prepared"), id }),
+  z.object({ intent: z.literal("meal-reopen"), id }),
+  z.object({ intent: z.literal("meal-delete-proposal"), id, proposalId: id }),
   z.object({ intent: z.literal("calendar-add"), ...eventFields }),
   z.object({ intent: z.literal("calendar-edit"), id, ...eventFields }),
   z.object({ intent: z.literal("calendar-remove"), id }),
@@ -137,7 +152,79 @@ export async function updateBoard(_: FormResult, form: FormData): Promise<FormRe
         }
       }
       const stale = "This entry changed. Refresh the board and try again.";
+      const meal = "id" in input ? board.meals.find((row) => row.id === input.id) : undefined;
       switch (input.intent) {
+        case "meal-propose": {
+          const today = householdDate(config.timeZone);
+          if (input.date < today || input.date > shiftDate(today, 90)) return "Choose a meal date within the next 90 days.";
+          const ingredients = [...new Set(input.ingredients.split(/[\n,]/).map((part) => part.trim()).filter(Boolean))].slice(0, 30);
+          let slot = board.meals.find((row) => row.date === input.date && row.slot === input.slot);
+          if (!slot) {
+            slot = { id: randomUUID(), date: input.date, slot: input.slot, proposals: [],
+              availability: {}, selected_id: null, cook_id: null, prepared: false };
+            board.meals.push(slot);
+          }
+          if (slot.proposals.length >= 20) return "This meal already has 20 suggestions.";
+          if (slot.proposals.some((proposal) => proposal.title.toLowerCase() === input.title.toLowerCase())) {
+            return "This dish has already been suggested for that meal.";
+          }
+          slot.proposals.push({ id: randomUUID(), title: input.title, ingredients, suggested_by: member.id, votes: [member.id] });
+          break;
+        }
+        case "meal-vote":
+        case "meal-unvote": {
+          const proposal = meal?.proposals.find((row) => row.id === input.proposalId);
+          if (!proposal) return stale;
+          proposal.votes = input.intent === "meal-vote"
+            ? [...new Set([...proposal.votes, member.id])]
+            : proposal.votes.filter((vote) => vote !== member.id);
+          break;
+        }
+        case "meal-availability":
+          if (!meal) return stale;
+          if (meal.prepared) return "This meal is already marked prepared.";
+          meal.availability[member.id] = input.availability;
+          if (meal.cook_id === member.id && input.availability !== "yes") meal.cook_id = null;
+          break;
+        case "meal-volunteer":
+          if (!meal) return stale;
+          if (meal.prepared || meal.cook_id || meal.availability[member.id] !== "yes") {
+            return "Mark yourself available first, or the meal already has a cook.";
+          }
+          meal.cook_id = member.id;
+          break;
+        case "meal-release":
+          if (!meal || meal.prepared || (meal.cook_id !== member.id && !member.manager)) return stale;
+          meal.cook_id = null;
+          break;
+        case "meal-select":
+          if (!member.manager) return restricted.error;
+          if (!meal || !meal.proposals.some((row) => row.id === input.proposalId) || meal.prepared) return stale;
+          meal.selected_id = input.proposalId;
+          break;
+        case "meal-unselect":
+          if (!member.manager) return restricted.error;
+          if (!meal || meal.prepared) return stale;
+          meal.selected_id = null;
+          break;
+        case "meal-prepared":
+          if (!meal || !meal.selected_id || !meal.cook_id || (meal.cook_id !== member.id && !member.manager)) {
+            return "A selected dish and an assigned cook are needed to mark it prepared.";
+          }
+          meal.prepared = true;
+          break;
+        case "meal-reopen":
+          if (!member.manager || !meal?.prepared) return stale;
+          meal.prepared = false;
+          break;
+        case "meal-delete-proposal": {
+          const proposal = meal?.proposals.find((row) => row.id === input.proposalId);
+          if (!meal || !proposal) return stale;
+          if (meal.prepared || (!member.manager && proposal.suggested_by !== member.id)) return restricted.error;
+          meal.proposals = meal.proposals.filter((row) => row.id !== input.proposalId);
+          if (meal.selected_id === input.proposalId) meal.selected_id = null;
+          break;
+        }
         case "calendar-add":
         case "calendar-edit": {
           if (input.kind === "event" && !input.date.startsWith("20")) {
