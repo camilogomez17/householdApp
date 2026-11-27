@@ -36,7 +36,24 @@ export function MealsBoard({ meals, groceries, people, member, today, catalog }:
     </div></div>
     {weeks.map((start) => <details key={start} open={start === weeks[0]} className="meal-week">
       <summary className="meal-week-title">Week of {fmt.format(new Date(`${start}T12:00:00Z`)).replace(/^\w+, /, "")}</summary>
-      {start === weeks[0] && start < today && <p className="item-meta" role="status">Day passed! {Math.floor((Date.parse(today) - Date.parse(start)) / 86400000)} past day(s) hidden.</p>}
+      {start === weeks[0] && start < today && <details className="meal-history">
+        <summary className="item-meta">Day passed! {Math.floor((Date.parse(today) - Date.parse(start)) / 86400000)} past day(s) <span style={{ textDecoration: "underline", cursor: "pointer" }}>hidden</span>.</summary>
+        <div className="meal-days">
+          {Array.from({ length: 7 }, (_, index) => shiftDate(start, index)).filter(day => day < today).map(day => <section key={day} className="lane meal-day">
+            <div className="lane-heading"><h3>{fmt.format(new Date(`${day}T12:00:00Z`))}</h3></div>
+            <div className="meal-slots">{slots.map(slot => {
+              const meal = lookup.get(`${day}/${slot}`);
+              const chosen = meal?.proposals.find(proposal => proposal.id === meal.selected_id);
+              return <div key={slot} className="meal-slot">
+                <strong>{slot[0].toUpperCase() + slot.slice(1)}</strong>
+                <p>{chosen ? chosen.title : "No meal recorded"}</p>
+                {chosen && <p className="item-meta">{meal?.prepared ? "Marked prepared" : "Not confirmed prepared"}{meal?.cook_id ? ` · Cook: ${person(meal.cook_id)}` : ""}</p>}
+                {chosen?.ingredients.length ? <p className="item-meta">{chosen.ingredients.join(", ")}</p> : null}
+              </div>;
+            })}</div>
+          </section>)}
+        </div>
+      </details>}
       <div className="meal-days">
         {Array.from({ length: 7 }, (_, index) => shiftDate(start, index)).filter((day) => day >= today).map((day) => <section key={day} className="lane meal-day">
           <div className="lane-heading"><h3>{fmt.format(new Date(`${day}T12:00:00Z`))}</h3></div>
