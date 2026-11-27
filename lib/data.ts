@@ -1,3 +1,4 @@
+import type { Recipe } from "./meal-catalog";
 import type { GrocerySection, GroceryCatalogItem } from "./grocery-sections";
 import { BlobPreconditionFailedError, get, put } from "@vercel/blob";
 import { randomUUID } from "node:crypto";
@@ -65,11 +66,12 @@ export type BoardData = {
   events: CalendarEvent[];
   lists: Checklist[];
   meals: MealPlan[];
+  mealCatalog: Recipe[];
 };
 
 function parseBoard(value: unknown): BoardData {
-  const board = value as Omit<BoardData, "events" | "lists" | "meals" | "groceryCatalog"> & Partial<Pick<BoardData, "events" | "lists" | "meals" | "groceryCatalog">>;
-  return { ...board, events: board.events ?? [], lists: board.lists ?? [], meals: board.meals ?? [], groceryCatalog: board.groceryCatalog ?? [] };
+  const board = value as Omit<BoardData, "events" | "lists" | "meals" | "groceryCatalog" | "mealCatalog"> & Partial<Pick<BoardData, "events" | "lists" | "meals" | "groceryCatalog" | "mealCatalog">>;
+  return { ...board, events: board.events ?? [], lists: board.lists ?? [], meals: board.meals ?? [], groceryCatalog: board.groceryCatalog ?? [], mealCatalog: board.mealCatalog ?? [] };
 }
 type Update = (board: BoardData) => string | undefined;
 
@@ -116,6 +118,7 @@ function demoBoard(timeZone: string): BoardData {
     events: [],
     lists: [],
     meals: [],
+    mealCatalog: [],
     groceryCatalog: [],
     groceries: [
       { id: randomUUID(), name: "Oat milk", quantity: "2 cartons", status: "buy", claimed_by: null },
@@ -163,7 +166,7 @@ async function readProduction() {
     headers: { "Accept-Encoding": "identity" },
     abortSignal: AbortSignal.timeout(10_000),
   });
-  if (!result) return { board: { groceries: [], chores: [], schedule: [], events: [], lists: [], meals: [], groceryCatalog: [] } as BoardData };
+  if (!result) return { board: { groceries: [], chores: [], schedule: [], events: [], lists: [], meals: [], groceryCatalog: [], mealCatalog: [] } as BoardData };
   if (result.statusCode !== 200) throw new Error("Unexpected Blob response.");
   const board = parseBoard(await new Response(result.stream).json());
   // Blob's CDN can prefix the stored ETag with W/ for compressed GETs.
@@ -185,6 +188,7 @@ export async function loadBoard(timeZone: string, calendarRange?: { first: strin
     events: board.events,
     lists: board.lists,
     meals: board.meals,
+    mealCatalog: board.mealCatalog,
     weeklySchedule: board.schedule.filter((entry) => entry.repeat_on?.length),
     pastSchedule: board.schedule.filter((entry) => !entry.repeat_on?.length && entry.ends_at.slice(0, 10) < today)
       .sort((a, b) => b.starts_at.localeCompare(a.starts_at)),

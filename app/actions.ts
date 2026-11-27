@@ -1,5 +1,7 @@
 "use server";
 
+import { mealCatalog, normalizeMeal } from "../lib/meal-catalog";
+
 import { grocerySections, normalizeGroceryName } from "../lib/grocery-sections";
 import { randomUUID } from "node:crypto";
 import { revalidatePath } from "next/cache";
@@ -62,7 +64,7 @@ const eventFields = {
 
 const mealSlot = z.enum(["breakfast", "lunch", "dinner"]);
 const mealDate = z.iso.date().refine((value) => value.startsWith("20"));
-const mealIngredients = z.array(z.uuid()).min(1).max(30);
+const mealIngredients = z.array(z.uuid()).max(30);
 
 const task = z.discriminatedUnion("intent", [
   z.object({ intent: z.literal("meal-propose"), date: mealDate, slot: mealSlot, title: name, ingredientIds: mealIngredients }),
@@ -162,7 +164,8 @@ export async function updateBoard(_: FormResult, form: FormData): Promise<FormRe
           const selectedIds = [...new Set(input.ingredientIds)];
           const selected = board.groceries.filter((item) => item.status === "maintain" && selectedIds.includes(item.id));
           if (selected.length !== selectedIds.length) return "Some ingredients are no longer in stock. Refresh and choose again.";
-          const ingredients = selected.map((item) => item.name);
+          const recipe = [...board.mealCatalog, ...mealCatalog].find(row => row.slot === input.slot && normalizeMeal(row.title) === normalizeMeal(input.title));
+          const ingredients = [...new Set([...(recipe?.ingredients ?? []), ...selected.map(item => item.name)])];
           let slot = board.meals.find((row) => row.date === input.date && row.slot === input.slot);
           if (!slot) {
             slot = { id: randomUUID(), date: input.date, slot: input.slot, proposals: [],
@@ -174,6 +177,7 @@ export async function updateBoard(_: FormResult, form: FormData): Promise<FormRe
             return "This dish has already been suggested for that meal.";
           }
           slot.proposals.push({ id: randomUUID(), title: input.title, ingredients, suggested_by: member.id, votes: [member.id] });
+          if (!recipe) board.mealCatalog.push({ title: input.title, slot: input.slot, ingredients });
           break;
         }
         case "meal-vote":

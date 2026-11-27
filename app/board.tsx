@@ -315,7 +315,7 @@ export function Board({ section, data, member, people, currency, timeZone, date,
           <ScheduleBoard items={data.schedule} weekly={data.weeklySchedule} past={data.pastSchedule.filter((entry) => entry.member_id === member.id)} member={member} people={people} timeZone={timeZone} today={date} />
         </>}
         {section === "lists" && <ListsBoard lists={data.lists} />}
-        {section === "meals" && <MealsBoard meals={data.meals} groceries={data.groceries} people={people} member={member} today={date} />}
+        {section === "meals" && <MealsBoard catalog={data.mealCatalog} meals={data.meals} groceries={data.groceries} people={people} member={member} today={date} />}
       </div>
     </main>
   </div>;

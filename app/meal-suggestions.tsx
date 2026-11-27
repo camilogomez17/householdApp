@@ -1,7 +1,8 @@
 "use client";
 
-import { useState } from "react";
-import type { Grocery } from "../lib/data";
+import { useId, useState } from "react";
+import { mealCatalog, normalizeMeal, type Recipe } from "../lib/meal-catalog";
+import type { Grocery, MealSlot } from "../lib/data";
 
 function combinations(stock: Grocery[], size: number, offset: number, limit: number) {
   const result: Grocery[][] = [];
@@ -22,7 +23,8 @@ function combinations(stock: Grocery[], size: number, offset: number, limit: num
   return result;
 }
 
-export function MealSuggestions({ stock }: { stock: Grocery[] }) {
+export function MealSuggestions({ stock, slot, catalog }: { stock: Grocery[]; slot: MealSlot; catalog: Recipe[] }) {
+  const listId = useId();
   const [selected, setSelected] = useState<string[]>([]);
   const [title, setTitle] = useState("");
   const [size, setSize] = useState(2);
@@ -34,6 +36,12 @@ export function MealSuggestions({ stock }: { stock: Grocery[] }) {
     title: items.map((item) => item.name).join(" + ").slice(0, 80),
     ids: items.map((item) => item.id),
   })) : [];
+  const recipes = [...new Map([...mealCatalog, ...catalog].filter(row => row.slot === slot).map(row => [normalizeMeal(row.title), row])).values()].map(recipe => {
+    const matched = recipe.ingredients.map(name => stock.find(item => normalizeMeal(item.name) === normalizeMeal(name)));
+    const ids = matched.flatMap(item => item ? [item.id] : []);
+    const missing = recipe.ingredients.filter((_, i) => !matched[i]);
+    return {...recipe, ids, missing, score: recipe.ingredients.length ? ids.length / recipe.ingredients.length : 0};
+  }).sort((a,b) => b.score - a.score || a.missing.length - b.missing.length);
   const choose = (ids: string[], name: string) => { setSelected(ids); setTitle(name); };
   const toggle = (id: string) => {
     const ids = selected.includes(id) ? selected.filter((value) => value !== id) : [...selected, id];
@@ -41,6 +49,11 @@ export function MealSuggestions({ stock }: { stock: Grocery[] }) {
     setTitle(stock.filter((item) => ids.includes(item.id)).map((item) => item.name).join(" + ").slice(0, 80));
   };
   return <>
+    <fieldset className="meal-ingredients"><legend>Recommended {slot} dishes</legend>
+      {recipes.slice(0, 8).map(recipe => <button type="button" className="button secondary" key={recipe.title} onClick={() => choose(recipe.ids, recipe.title)}>
+        {recipe.title} · {Math.round(recipe.score * 100)}% available{recipe.missing.length ? ` · Missing: ${recipe.missing.join(", ")}` : ""}
+      </button>)}
+    </fieldset>
     <fieldset className="meal-ingredients">
       <legend>Ingredient combinations</legend>
       <label>Number of ingredients<select value={count || 1} onChange={(event) => { setSize(Number(event.target.value)); setPage(0); }}>
@@ -63,6 +76,7 @@ export function MealSuggestions({ stock }: { stock: Grocery[] }) {
       </label>)}
       {!stock.length && <p className="item-meta">No items in Maintain stock. Update groceries first.</p>}
     </fieldset>
-    <label>Dish<input name="title" value={title} onChange={(event) => setTitle(event.target.value)} maxLength={80} required /></label>
+    <label>Dish<input name="title" list={listId} value={title} onChange={(event) => { const value = event.target.value; const recipe = recipes.find(row => normalizeMeal(row.title) === normalizeMeal(value)); if (recipe) choose(recipe.ids, recipe.title); else setTitle(value); }} maxLength={80} required /></label>
+    <datalist id={listId}>{recipes.map(recipe => <option key={recipe.title} value={recipe.title} />)}</datalist>
   </>;
 }

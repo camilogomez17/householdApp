@@ -1,3 +1,5 @@
+import type { Recipe } from "../lib/meal-catalog";
+import { grocerySection } from "../lib/grocery-sections";
 import type { ReactNode } from "react";
 import type { Grocery, MealPlan, MealSlot } from "../lib/data";
 import { shiftDate } from "../lib/data";
@@ -18,10 +20,10 @@ function Action({ intent, id, proposalId, children }: {
   </ActionForm>;
 }
 
-export function MealsBoard({ meals, groceries, people, member, today }: {
-  meals: MealPlan[]; groceries: Grocery[]; people: Person[]; member: Member; today: string;
+export function MealsBoard({ meals, groceries, people, member, today, catalog }: {
+  catalog: Recipe[]; meals: MealPlan[]; groceries: Grocery[]; people: Person[]; member: Member; today: string;
 }) {
-  const stock = groceries.filter((item) => item.status === "maintain").sort((a, b) => a.name.localeCompare(b.name));
+  const stock = groceries.filter((item) => item.status === "maintain" && !["Household", "Personal Care"].includes(grocerySection(item))).sort((a, b) => a.name.localeCompare(b.name));
   const weekday = new Date(`${today}T12:00:00Z`).getUTCDay();
   const monday = shiftDate(today, -((weekday + 6) % 7));
   const weeks = [0, 7].map((offset) => shiftDate(monday, offset));
@@ -95,7 +97,7 @@ export function MealsBoard({ meals, groceries, people, member, today }: {
                   <ActionForm action={updateBoard} intent="meal-propose" className="entry-form" feedback>
                     <input type="hidden" name="date" value={day} />
                     <input type="hidden" name="slot" value={slot} />
-                    <MealSuggestions stock={stock} />
+                    <MealSuggestions stock={stock} slot={slot} catalog={catalog} />
                     <Submit>Suggest meal</Submit>
                   </ActionForm>
                 </details>}
@@ -105,6 +107,6 @@ export function MealsBoard({ meals, groceries, people, member, today }: {
         </section>)}
       </div>
     </details>)}
-    <p className="item-meta">Suggestions and votes are shared with the household. Ingredients are selected from Maintain stock. Selection does not reserve or deduct quantities.</p>
+    <p className="item-meta">Suggestions and votes are shared with the household. Recipe suggestions identify missing ingredients; custom combinations use Maintain stock. Selection does not reserve or deduct quantities.</p>
   </section>;
 }
