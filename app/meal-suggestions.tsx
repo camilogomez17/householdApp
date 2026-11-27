@@ -3,29 +3,37 @@
 import { useState } from "react";
 import type { Grocery } from "../lib/data";
 
-const recipes: { title: string; groups: RegExp[] }[] = [
-  { title: "Chicken and rice", groups: [/\bchicken\b/i, /\brice\b/i] },
-  { title: "Egg fried rice", groups: [/\beggs?\b/i, /\brice\b/i, /\bonions?\b/i] },
-  { title: "Chicken and onion skillet", groups: [/\bchicken\b/i, /\bonions?\b/i] },
-  { title: "Potato and egg hash", groups: [/\bpotato(?:es)?\b/i, /\beggs?\b/i] },
-  { title: "Tomato pasta", groups: [/\b(pasta|spaghetti|penne)\b/i, /\btomato(?:es)?\b/i] },
-  { title: "Rice and beans", groups: [/\brice\b/i, /\bbeans?\b/i] },
-  { title: "Cheese omelet", groups: [/\beggs?\b/i, /\bcheese\b/i] },
-  { title: "Tuna sandwich", groups: [/\btuna\b/i, /\bbread\b/i] },
-  { title: "Oatmeal with banana", groups: [/\b(oats|oatmeal)\b/i, /\bbananas?\b/i] },
-  { title: "Tomato and cucumber salad", groups: [/\btomato(?:es)?\b/i, /\bcucumbers?\b/i] },
-  { title: "Chicken and potato tray bake", groups: [/\bchicken\b/i, /\bpotato(?:es)?\b/i] },
-  { title: "Pasta with cheese", groups: [/\b(pasta|spaghetti|penne)\b/i, /\bcheese\b/i] },
-];
+function combinations(stock: Grocery[], size: number, offset: number, limit: number) {
+  const result: Grocery[][] = [];
+  let skipped = 0;
+  function visit(start: number, items: Grocery[]) {
+    if (result.length >= limit) return;
+    if (items.length === size) {
+      if (skipped < offset) skipped++;
+      else result.push(items);
+      return;
+    }
+    for (let i = start; i <= stock.length - (size - items.length); i++) {
+      visit(i + 1, [...items, stock[i]]);
+      if (result.length >= limit) break;
+    }
+  }
+  visit(0, []);
+  return result;
+}
 
 export function MealSuggestions({ stock }: { stock: Grocery[] }) {
   const [selected, setSelected] = useState<string[]>([]);
   const [title, setTitle] = useState("");
-  const suggestions = recipes.flatMap((recipe) => {
-    const items = recipe.groups.map((group) => stock.find((item) => group.test(item.name)));
-    if (!items.every((item): item is Grocery => Boolean(item))) return [];
-    return [{ title: recipe.title, ids: items.map((item) => item.id) }];
-  });
+  const [size, setSize] = useState(2);
+  const [page, setPage] = useState(0);
+  const ordered = [...stock].sort((a, b) => a.name.localeCompare(b.name) || a.id.localeCompare(b.id));
+  const count = Math.min(size, ordered.length);
+  const pageSize = 20;
+  const suggestions = count ? combinations(ordered, count, page * pageSize, pageSize + 1).map((items) => ({
+    title: items.map((item) => item.name).join(" + ").slice(0, 80),
+    ids: items.map((item) => item.id),
+  })) : [];
   const choose = (ids: string[], name: string) => { setSelected(ids); setTitle(name); };
   const toggle = (id: string) => {
     const ids = selected.includes(id) ? selected.filter((value) => value !== id) : [...selected, id];
@@ -34,11 +42,18 @@ export function MealSuggestions({ stock }: { stock: Grocery[] }) {
   };
   return <>
     <fieldset className="meal-ingredients">
-      <legend>Suggested dishes from stock</legend>
-      {suggestions.map((suggestion) => <button key={suggestion.title} type="button" className="button secondary"
+      <legend>Ingredient combinations</legend>
+      <label>Number of ingredients<select value={count || 1} onChange={(event) => { setSize(Number(event.target.value)); setPage(0); }}>
+        {Array.from({ length: Math.min(stock.length, 30) }, (_, i) => <option key={i + 1} value={i + 1}>{i + 1}</option>)}
+      </select></label>
+      {suggestions.slice(0, pageSize).map((suggestion) => <button key={suggestion.ids.join(",")} type="button" className="button secondary"
         aria-pressed={title === suggestion.title && selected.length === suggestion.ids.length && suggestion.ids.every((id) => selected.includes(id))}
         onClick={() => choose(suggestion.ids, suggestion.title)}>{suggestion.title}</button>)}
-      {!suggestions.length && <p className="item-meta">No matching recipe yet. Combine ingredients below to create a dish.</p>}
+      {!suggestions.length && <p className="item-meta">No ingredients in stock.</p>}
+      <div className="item-actions">
+        <button type="button" className="button secondary" disabled={page === 0} onClick={() => setPage(page - 1)}>Previous</button>
+        <button type="button" className="button secondary" disabled={suggestions.length <= pageSize} onClick={() => setPage(page + 1)}>Next</button>
+      </div>
     </fieldset>
     <fieldset className="meal-ingredients">
       <legend>Build your own combination</legend>
