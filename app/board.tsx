@@ -220,7 +220,7 @@ function ScheduleBoard({ items, weekly, past, people, member, timeZone, today }:
   items: ScheduleEntry[]; weekly: ScheduleEntry[]; past: ScheduleEntry[]; people: Person[]; member: Viewer; timeZone: string; today: string;
 }) {
   const date = Formatters("USD");
-  const days = Map.groupBy(items, (item) => item.starts_at.slice(0, 10));
+  const days = Map.groupBy(items.filter((item) => !item.repeat_on?.length), (item) => item.starts_at.slice(0, 10));
   return <>
     <div className="section-head">
       <div><h2 id="availability">Home and away</h2><p>Schedule times use {timeZone.replaceAll("_", " ")}.</p></div>
@@ -242,7 +242,8 @@ function ScheduleBoard({ items, weekly, past, people, member, timeZone, today }:
         </div>}
       </li>)}</ul>
     </section>}
-    {!days.size && <p className="empty schedule-empty">No upcoming schedules. Add when you’ll be home or away.</p>}
+    {!days.size && !weekly.length && <p className="empty schedule-empty">No upcoming schedules. Add when you’ll be home or away.</p>}
+    {days.size > 0 && <h3 className="one-time-heading">One-time schedules</h3>}
     <div className="schedule-days">
       {[...days].map(([day, entries]) => <section className="lane schedule-day" key={day}>
         <div className="lane-heading"><span className="lane-icon maintain"><CalendarDays size={18} /></span><h3>{date.date(day)}</h3></div>
