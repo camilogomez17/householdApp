@@ -1,3 +1,4 @@
+import { grocerySections, grocerySection } from "../lib/grocery-sections";
 import { CalendarDays, Check, ChevronDown, ClipboardList, Clock3, CircleDollarSign, House, ListChecks,
   LogOut, Plus, ShoppingBasket, Trash2, Users, UtensilsCrossed, X } from "lucide-react";
 import Link from "next/link";
@@ -100,6 +101,9 @@ function GroceryFields({ item }: { item?: Grocery }) {
   return <>
     <label>Item<input name="name" placeholder="e.g. Oat milk" defaultValue={item?.name} maxLength={80} required /></label>
     <label>Quantity or target<input name="quantity" placeholder="e.g. 2 cartons" defaultValue={item?.quantity} maxLength={40} /></label>
+    <label>Department<select name="section" defaultValue={item ? grocerySection(item) : "Other"}>
+      {grocerySections.map((section) => <option key={section}>{section}</option>)}
+    </select></label>
     <label>List<select name="status" defaultValue={item?.status ?? "buy"}>
       <option value="buy">To buy</option><option value="maintain">Maintain stock</option><option value="remove">Remove</option>
     </select></label>
@@ -120,8 +124,11 @@ function GroceryBoard({ items, member, people }: { items: Grocery[]; member: Vie
           <div className="lane-heading"><span className={`lane-icon ${status}`}><group.icon size={18} /></span>
             <h3>{group.label}</h3><span className="count">{rows.length}</span>
           </div>
-          <ul className="items">
-            {rows.map((item) => <li key={item.id} className="item">
+          {grocerySections.map((section) => {
+            const department = rows.filter((item) => grocerySection(item) === section).sort((a, b) => a.name.localeCompare(b.name));
+            if (!department.length) return null;
+            return <div key={section} className="grocery-department"><h4>{section}</h4><ul className="items">
+            {department.map((item) => <li key={item.id} className="item">
               <div className="item-title"><strong>{item.name}</strong>
                 {item.quantity && <small>{item.quantity}</small>}
               </div>
@@ -134,7 +141,8 @@ function GroceryBoard({ items, member, people }: { items: Grocery[]; member: Vie
                 <EditForm id={item.id} intent="grocery-edit"><GroceryFields item={item} /></EditForm>
               </div>
             </li>)}
-          </ul>
+          </ul></div>;
+          })}
           {!rows.length && <p className="empty">{group.empty}</p>}
         </section>;
       })}

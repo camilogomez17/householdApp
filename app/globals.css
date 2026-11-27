@@ -336,3 +336,6 @@ summary::-webkit-details-marker { display: none; }
 .entry-form .meal-ingredients label { display: flex; align-items: center; gap: 8px; padding: 5px 0; }
 .entry-form .meal-ingredients input[type="checkbox"] { width: 17px; min-height: 17px; flex: none; margin: 0; accent-color: var(--forest); }
 .meal-ingredients small { color: var(--muted); font-weight: 400; }
+
+.grocery-department { margin-top: 14px; }
+.grocery-department h4 { margin: 0 0 8px; font-size: .85rem; font-weight: 650; }

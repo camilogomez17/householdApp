@@ -1,3 +1,4 @@
+import type { GrocerySection } from "./grocery-sections";
 import { BlobPreconditionFailedError, get, put } from "@vercel/blob";
 import { randomUUID } from "node:crypto";
 import { link, mkdir, readFile, rename, unlink, writeFile } from "node:fs/promises";
@@ -17,6 +18,7 @@ export type MealPlan = {
 };
 
 export type Grocery = {
+  section?: GrocerySection;
   id: string;
   name: string;
   quantity: string;

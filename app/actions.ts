@@ -1,5 +1,6 @@
 "use server";
 
+import { grocerySections } from "../lib/grocery-sections";
 import { randomUUID } from "node:crypto";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
@@ -33,6 +34,7 @@ export async function logout() {
 
 const id = z.uuid();
 const name = z.string().trim().min(1).max(80);
+const groceryDepartment = z.enum(grocerySections);
 const groceryStatus = z.enum(["buy", "maintain", "remove"]);
 const assignee = z.string().max(32);
 const taskAmount = z.string().regex(/^(?:\d{1,5}(?:\.\d{1,2})?)?$/)
@@ -84,8 +86,8 @@ const task = z.discriminatedUnion("intent", [
   z.object({ intent: z.literal("list-item-edit"), id, itemId: id, label: name }),
   z.object({ intent: z.literal("list-item-check"), id, itemId: id, checked: z.enum(["yes", "no"]) }),
   z.object({ intent: z.literal("list-item-remove"), id, itemId: id }),
-  z.object({ intent: z.literal("grocery-add"), name, quantity: z.string().trim().max(40), status: groceryStatus }),
-  z.object({ intent: z.literal("grocery-edit"), id, name, quantity: z.string().trim().max(40), status: groceryStatus }),
+  z.object({ intent: z.literal("grocery-add"), name, quantity: z.string().trim().max(40), status: groceryStatus, section: groceryDepartment }),
+  z.object({ intent: z.literal("grocery-edit"), id, name, quantity: z.string().trim().max(40), status: groceryStatus, section: groceryDepartment }),
   z.object({ intent: z.enum(["grocery-claim", "grocery-release", "grocery-delete"]), id }),
   z.object({ intent: z.literal("chore-add"), name, assignee, reward: taskAmount, due }),
   z.object({ intent: z.literal("chore-edit"), id, name, due, assignee: assignee.optional(), reward: taskAmount.optional() }),
@@ -274,13 +276,14 @@ export async function updateBoard(_: FormResult, form: FormData): Promise<FormRe
         }
         case "grocery-add":
           board.groceries.unshift({ id: randomUUID(), name: input.name, quantity: input.quantity,
-            status: input.status, claimed_by: null });
+            status: input.status, section: input.section, claimed_by: null });
           break;
         case "grocery-edit":
           if (!grocery) return stale;
           grocery.name = input.name;
           grocery.quantity = input.quantity;
           grocery.status = input.status;
+          grocery.section = input.section;
           if (input.status !== "buy") grocery.claimed_by = null;
           break;
         case "grocery-claim":
