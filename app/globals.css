@@ -339,3 +339,11 @@ summary::-webkit-details-marker { display: none; }
 
 .grocery-department { margin-top: 14px; }
 .grocery-department h4 { margin: 0 0 8px; padding-inline: 12px; font-size: .85rem; font-weight: 650; }
+
+.grocery-search { min-width: 0; grid-column: 1 / -1; display: grid; gap: 6px; }
+.grocery-results { max-height: 260px; overflow-y: auto; border: 1px solid var(--line); border-radius: 8px; background: var(--white); }
+.grocery-result { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 4px 12px; width: 100%; text-align: left; padding: 10px 12px; border: 0; border-bottom: 1px solid var(--line); background: transparent; color: var(--ink); cursor: pointer; font: inherit; }
+.grocery-result:last-child { border-bottom: 0; }
+.grocery-result:hover, .grocery-result:focus-visible { background: #eff5f1; }
+.grocery-result small, .grocery-category { font-size: .8rem; }
+.grocery-category { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
