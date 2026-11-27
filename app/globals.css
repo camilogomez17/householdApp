@@ -270,3 +270,18 @@ summary::-webkit-details-marker { display: none; }
 }
 
 .birthday-link:hover strong { text-decoration: underline; }
+
+.calendar-agenda-head .calendar-controls { margin: 0 0 0 auto; }
+.calendar-card { margin-top: 14px; }
+.calendar-controls h2 { flex: 1; text-align: center; font-size: clamp(1rem, 3vw, 1.35rem); }
+.calendar-entry-types { display: flex; gap: 7px; flex-wrap: wrap; margin-bottom: 9px; }
+.calendar-entry-types button[aria-pressed="true"] { background: var(--forest); color: var(--white); }
+.quick-form .calendar-add-form { width: 100%; }
+.schedule-options { grid-column: 1 / -1; }
+.schedule-options > summary { cursor: pointer; font-weight: 650; }
+.quick-form .schedule-options > summary { padding: 0; border: 0; min-height: 34px; color: var(--forest); background: none; }
+.schedule-options > label, .schedule-options > fieldset { margin-top: 8px; }
+#day-agenda, #calendar-month, #calendar-add { scroll-margin-top: 12px; }
+@media (max-width: 620px) {
+  .calendar-agenda-head .calendar-controls { margin-left: 0; }
+}

@@ -87,6 +87,12 @@ export async function updateBoard(_: FormResult, form: FormData): Promise<FormRe
   if (!member || !config) return { error: "Sign in again to update the board." };
 
   const fields = Object.fromEntries(form);
+  if (fields.kind === "birthday" && "birthdayMonth" in fields) {
+    const month = String(fields.birthdayMonth).padStart(2, "0");
+    const day = String(fields.birthdayDay).padStart(2, "0");
+    fields.date = `2000-${month}-${day}`;
+    fields.time = "";
+  }
   const scheduleForm = fields.intent === "schedule-add" || fields.intent === "schedule-edit";
   if (scheduleForm && "startDate" in fields) {
     const start = scheduleDate.safeParse(fields.startDate);
@@ -103,7 +109,9 @@ export async function updateBoard(_: FormResult, form: FormData): Promise<FormRe
   if (!parsed.success) {
     if (scheduleForm) return { error: "Check the date, both times, and the note (100 characters maximum)." };
     if (fields.intent === "calendar-add" || fields.intent === "calendar-edit") {
-      return { error: "Enter a name and a valid date. The note can be up to 100 characters." };
+      return { error: fields.kind === "birthday"
+        ? "Enter a name and a valid birthday month and day."
+        : "Enter a name and a valid date. The note can be up to 100 characters." };
     }
     return { error: "Check the fields and try again." };
   }
@@ -280,7 +288,7 @@ export async function updateBoard(_: FormResult, form: FormData): Promise<FormRe
     const day = input.kind === "birthday"
       ? nextBirthday(input.date.slice(5), householdDate(config.timeZone))
       : input.date;
-    redirect(`/?section=calendar&day=${day}`);
+    redirect(`/?section=calendar&day=${day}#day-agenda`);
   }
   return { saved: true };
 }
