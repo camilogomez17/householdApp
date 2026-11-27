@@ -327,3 +327,6 @@ summary::-webkit-details-marker { display: none; }
 .meal-suggest .entry-form { margin-top: 8px; }
 @media (max-width: 850px) { .meal-days { grid-template-columns: 1fr; } .sidebar nav { grid-template-columns: repeat(5, minmax(0, 1fr)); } }
 @media (max-width: 420px) { .sidebar nav a { font-size: .72rem; } .sidebar nav a svg { width: 16px; } }
+
+.calendar-marker.holiday, .tag.holiday { background: #e8e5f7; color: #51417e; }
+@media (max-width: 620px) { .calendar-marker.holiday { background: #7963ae; } }

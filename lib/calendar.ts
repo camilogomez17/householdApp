@@ -32,3 +32,34 @@ export function nextBirthday(monthDay: string, today: string) {
   const thisYear = birthdayInYear(monthDay, year);
   return thisYear >= today ? thisYear : birthdayInYear(monthDay, year + 1);
 }
+
+export function usHolidaysOn(date: string): string[] {
+  const year = Number(date.slice(0, 4));
+  const holidays: { date: string; name: string }[] = [];
+  const weekday = (day: string) => new Date(day + "T12:00:00Z").getUTCDay();
+  for (const y of [year - 1, year, year + 1]) {
+    const fixed = (monthDay: string, name: string) => {
+      const day = y + "-" + monthDay;
+      holidays.push({ date: day, name });
+      const w = weekday(day);
+      if (w === 0 || w === 6) holidays.push({ date: shiftDate(day, w === 0 ? 1 : -1), name: name + " (observed)" });
+    };
+    const nth = (month: string, w: number, n: number, name: string) => {
+      const first = y + "-" + month + "-01";
+      holidays.push({ date: shiftDate(first, (w - weekday(first) + 7) % 7 + (n - 1) * 7), name });
+    };
+    fixed("01-01", "New Year's Day");
+    nth("01", 1, 3, "Martin Luther King Jr. Day");
+    nth("02", 1, 3, "Washington's Birthday (Presidents' Day)");
+    const mayEnd = y + "-05-31";
+    holidays.push({ date: shiftDate(mayEnd, -((weekday(mayEnd) + 6) % 7)), name: "Memorial Day" });
+    if (y >= 2021) fixed("06-19", "Juneteenth");
+    fixed("07-04", "Independence Day");
+    nth("09", 1, 1, "Labor Day");
+    nth("10", 1, 2, "Columbus Day");
+    fixed("11-11", "Veterans Day");
+    nth("11", 4, 4, "Thanksgiving Day");
+    fixed("12-25", "Christmas Day");
+  }
+  return holidays.filter((holiday) => holiday.date === date).map((holiday) => holiday.name);
+}

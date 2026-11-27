@@ -1,7 +1,7 @@
 import { Cake, ChevronLeft, ChevronRight, Clock3, Plus } from "lucide-react";
 import Link from "next/link";
 import { shiftDate, type CalendarEvent, type ScheduleEntry } from "../lib/data";
-import { birthdayInYear, nextBirthday, type calendarWindow } from "../lib/calendar";
+import { birthdayInYear, nextBirthday, usHolidaysOn, type calendarWindow } from "../lib/calendar";
 import { updateBoard } from "./actions";
 import { ActionForm, Submit } from "./forms";
 import { CalendarAdd } from "./calendar-add";
@@ -58,6 +58,7 @@ export function CalendarBoard({ window, today, events, schedule, people, memberI
   for (let date = first; date <= last; date = shiftDate(date, 1)) {
     days.push({
       date,
+      holidays: usHolidaysOn(date),
       events: events.filter((event) => occursOn(event, date)).sort((a, b) => a.time.localeCompare(b.time)),
       availability: schedule.filter((entry) => entry.starts_at.slice(0, 10) <= date && entry.ends_at.slice(0, 10) >= date),
     });
@@ -91,8 +92,12 @@ export function CalendarBoard({ window, today, events, schedule, people, memberI
       </details>
     </div>
     <div className="lane calendar-agenda">
-      {!selected?.events.length && !selected?.availability.length && <p className="empty">Nothing on the calendar for this day.</p>}
+      {!selected?.holidays.length && !selected?.events.length && !selected?.availability.length && <p className="empty">Nothing on the calendar for this day.</p>}
       <ul className="items">
+        {selected?.holidays.map((holiday) => <li className="item" key={holiday}>
+          <div className="item-title"><strong>{holiday}</strong><span className="tag holiday">U.S. federal holiday</span></div>
+          <p className="item-meta">All day</p>
+        </li>)}
         {selected?.events.map((event) => <li className="item" key={event.id}>
           <div className="item-title"><strong>{event.title}</strong>
             <span className={`tag ${event.kind === "birthday" ? "buy" : "maintain"}`}>
@@ -147,7 +152,7 @@ export function CalendarBoard({ window, today, events, schedule, people, memberI
       </nav>
       <div className="calendar-grid">
         {weekdays.map((name) => <span className="calendar-weekday" key={name}>{name}</span>)}
-        {days.map(({ date, events, availability }) => {
+        {days.map(({ date, events, availability, holidays }) => {
           const statuses = [...new Map(availability.map(({ member_id, status }) => [
             `${member_id}-${status}`, { name: nameOf(member_id), status, label: status === "home" ? "Home" : "Away" },
           ])).entries()];
@@ -155,8 +160,9 @@ export function CalendarBoard({ window, today, events, schedule, people, memberI
           return <Link key={date} href={`${href(date)}#day-agenda`}
             className={`calendar-day ${date.slice(0, 7) !== day.slice(0, 7) ? "outside-month" : ""}`}
             aria-current={date === day ? "date" : undefined}
-            aria-label={[dayLabel.format(asDate(date)), `${events.length} calendar entries`, ...statusLabels].join(", ")}>
+            aria-label={[dayLabel.format(asDate(date)), `${events.length} calendar entries`, ...holidays, ...statusLabels].join(", ")}>
             <span className="calendar-date">{Number(date.slice(8))}</span>
+            {holidays.map((holiday) => <span key={holiday} className="calendar-marker holiday" title={holiday}>{holiday}</span>)}
             {events.length > 0 && <span className={`calendar-marker ${events[0].kind}`}>{events[0].title}</span>}
             {statuses.map(([key, { name, status, label }]) => <span key={key} className={`calendar-availability ${status}`}>
               <span>{name}</span><span>{label}</span>
