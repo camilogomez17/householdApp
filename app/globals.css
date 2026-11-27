@@ -338,4 +338,4 @@ summary::-webkit-details-marker { display: none; }
 .meal-ingredients small { color: var(--muted); font-weight: 400; }
 
 .grocery-department { margin-top: 14px; }
-.grocery-department h4 { margin: 0 0 8px; font-size: .85rem; font-weight: 650; }
+.grocery-department h4 { margin: 0 0 8px; padding-inline: 12px; font-size: .85rem; font-weight: 650; }
