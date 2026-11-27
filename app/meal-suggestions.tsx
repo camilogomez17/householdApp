@@ -2,6 +2,7 @@
 
 import { useId, useState } from "react";
 import { mealCatalog, normalizeMeal, type Recipe } from "../lib/meal-catalog";
+import { matchRecipe } from "../lib/ingredient-substitutions";
 import type { Grocery, MealSlot } from "../lib/data";
 
 function combinations(stock: Grocery[], size: number, offset: number, limit: number) {
@@ -37,11 +38,8 @@ export function MealSuggestions({ stock, slot, catalog }: { stock: Grocery[]; sl
     ids: items.map((item) => item.id),
   })) : [];
   const recipes = [...new Map([...mealCatalog, ...catalog].filter(row => row.slot === slot).map(row => [normalizeMeal(row.title), row])).values()].map(recipe => {
-    const matched = recipe.ingredients.map(name => stock.find(item => normalizeMeal(item.name) === normalizeMeal(name)));
-    const ids = matched.flatMap(item => item ? [item.id] : []);
-    const missing = recipe.ingredients.filter((_, i) => !matched[i]);
-    return {...recipe, ids, missing, score: recipe.ingredients.length ? ids.length / recipe.ingredients.length : 0};
-  }).sort((a,b) => b.score - a.score || a.missing.length - b.missing.length);
+    return {...recipe, ...matchRecipe(recipe, stock)};
+  }).sort((a,b) => b.coverage - a.coverage || b.score - a.score || a.missing.length - b.missing.length);
   const choose = (ids: string[], name: string) => { setSelected(ids); setTitle(name); };
   const toggle = (id: string) => {
     const ids = selected.includes(id) ? selected.filter((value) => value !== id) : [...selected, id];
@@ -51,7 +49,7 @@ export function MealSuggestions({ stock, slot, catalog }: { stock: Grocery[]; sl
   return <>
     <fieldset className="meal-ingredients"><legend>Recommended {slot} dishes</legend>
       {recipes.slice(0, 8).map(recipe => <button type="button" className="button secondary" key={recipe.title} onClick={() => choose(recipe.ids, recipe.title)}>
-        {recipe.title} · {Math.round(recipe.score * 100)}% available{recipe.missing.length ? ` · Missing: ${recipe.missing.join(", ")}` : ""}
+        {recipe.title} · {Math.round(recipe.coverage * 100)}% available · {Math.round(recipe.score * 100)}% compatibility{recipe.substitutions.length ? ` · Substitutes: ${recipe.substitutions.map(row => `${row.required} → ${row.actual}`).join(", ")}` : ""}{recipe.missing.length ? ` · Missing: ${recipe.missing.join(", ")}` : ""}
       </button>)}
     </fieldset>
     <fieldset className="meal-ingredients">

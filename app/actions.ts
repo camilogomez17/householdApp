@@ -1,5 +1,6 @@
 "use server";
 
+import { matchRecipe } from "../lib/ingredient-substitutions";
 import { mealCatalog, normalizeMeal } from "../lib/meal-catalog";
 
 import { grocerySections, normalizeGroceryName } from "../lib/grocery-sections";
@@ -165,7 +166,8 @@ export async function updateBoard(_: FormResult, form: FormData): Promise<FormRe
           const selected = board.groceries.filter((item) => item.status === "maintain" && selectedIds.includes(item.id));
           if (selected.length !== selectedIds.length) return "Some ingredients are no longer in stock. Refresh and choose again.";
           const recipe = [...board.mealCatalog, ...mealCatalog].find(row => row.slot === input.slot && normalizeMeal(row.title) === normalizeMeal(input.title));
-          const ingredients = [...new Set([...(recipe?.ingredients ?? []), ...selected.map(item => item.name)])];
+          const matched = recipe ? matchRecipe(recipe, selected) : null;
+          const ingredients = [...new Set([...(matched?.ingredients ?? []), ...selected.map(item => item.name)])];
           let slot = board.meals.find((row) => row.date === input.date && row.slot === input.slot);
           if (!slot) {
             slot = { id: randomUUID(), date: input.date, slot: input.slot, proposals: [],
