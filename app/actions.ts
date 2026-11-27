@@ -5,7 +5,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { z } from "zod";
 import { getConfig } from "../lib/config";
-import { householdDate, updateData } from "../lib/data";
+import { householdDate, shiftDate, updateData } from "../lib/data";
 import { currentMember, signIn, signInWithCode, signOut } from "../lib/session";
 
 export type FormResult = { error?: string; saved?: boolean };
@@ -75,6 +75,11 @@ export async function updateBoard(_: FormResult, form: FormData): Promise<FormRe
     : "Check the fields and try again." };
 
   const input = parsed.data;
+  const repeatDays = input.intent === "schedule-add" ? form.getAll("repeatDay") : [];
+  if (repeatDays.length > 7 || repeatDays.some((day) => typeof day !== "string" || !/^[0-6]$/.test(day))) {
+    return { error: "Choose valid days for the weekly schedule." };
+  }
+  const repeatOn = [...new Set(repeatDays.map(Number))];
   const canAssign = (assigneeId: string) =>
     (member.manager && (!assigneeId || config.members.some((person) => person.id === assigneeId)))
     || assigneeId === member.id;
@@ -142,11 +147,15 @@ export async function updateBoard(_: FormResult, form: FormData): Promise<FormRe
           break;
         case "schedule-add":
           if (input.ends <= input.starts) return "End time must be after the start. If it ends overnight, choose the next day as the end date.";
-          if (input.ends.slice(0, 10) < householdDate(config.timeZone)) {
+          if (repeatOn.length) {
+            const latestEnd = shiftDate(input.starts.slice(0, 10), 1) + input.starts.slice(10);
+            if (input.ends > latestEnd) return "A weekly schedule block can be up to 24 hours long.";
+          } else if (input.ends.slice(0, 10) < householdDate(config.timeZone)) {
             return "This entry ends before today. Choose today or a future date.";
           }
           board.schedule.push({ id: randomUUID(), member_id: member.id,
-            status: input.status, starts_at: input.starts, ends_at: input.ends, note: input.note });
+            status: input.status, starts_at: input.starts, ends_at: input.ends, note: input.note,
+            ...(repeatOn.length ? { repeat_on: repeatOn } : {}) });
           break;
         case "schedule-delete":
           if (!board.schedule.some((entry) => entry.id === input.id && entry.member_id === member.id)) return stale;

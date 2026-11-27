@@ -211,3 +211,11 @@ summary::-webkit-details-marker { display: none; }
   font-weight: 650;
   overflow-wrap: anywhere;
 }
+
+.weekly-schedule { margin-bottom: 14px; }
+.repeat-days { grid-column: 1 / -1; margin: 0; padding: 9px 12px 12px; border: 1px solid var(--line); border-radius: 8px; }
+.repeat-days legend { padding-inline: 5px; font-size: .85rem; font-weight: 650; }
+.repeat-days p { margin: 0 0 6px; font-size: .85rem; }
+.repeat-days > div { display: flex; flex-wrap: wrap; gap: 6px 12px; }
+.entry-form .repeat-days label { display: inline-flex; align-items: center; gap: 5px; padding-block: 4px; }
+.entry-form .repeat-days input[type="checkbox"] { width: 17px; min-height: 17px; margin: 0; accent-color: var(--forest); }

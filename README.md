@@ -4,7 +4,7 @@ Private Next.js board for shared groceries, chores and home/away schedules.
 
 - **Groceries** — List what to buy, maintain or remove. Claim a purchase so two people do not buy the same item.
 - **Chores** — Assign work, mark it complete and let a manager record a payout after paying outside the app.
-- **Schedule** — Post your own home and away windows. Times use the household time zone. The board refreshes when you return to the tab and once a minute while it is visible.
+- **Schedule** — Post one-time or weekly home and away windows. Times use the household time zone. The board refreshes when you return to the tab and once a minute while it is visible.
 
 ## Using the board
 

@@ -26,7 +26,12 @@ const choreGroups = {
 export type Section = keyof typeof sections;
 type Person = { id: string; name: string };
 type Viewer = Person & { manager: boolean };
-type Data = { groceries: Grocery[]; chores: Chore[]; schedule: ScheduleEntry[] };
+type Data = { groceries: Grocery[]; chores: Chore[]; schedule: ScheduleEntry[]; weeklySchedule: ScheduleEntry[] };
+
+const weekdays = [
+  { id: 1, label: "Mon" }, { id: 2, label: "Tue" }, { id: 3, label: "Wed" },
+  { id: 4, label: "Thu" }, { id: 5, label: "Fri" }, { id: 6, label: "Sat" }, { id: 0, label: "Sun" },
+];
 
 export function Brand() {
   return <div className="brand">
@@ -176,8 +181,8 @@ function ChoreBoard({ items, member, people, currency }: { items: Chore[]; membe
   </>;
 }
 
-function ScheduleBoard({ items, people, member, timeZone, today }: {
-  items: ScheduleEntry[]; people: Person[]; member: Viewer; timeZone: string; today: string;
+function ScheduleBoard({ items, weekly, people, member, timeZone, today }: {
+  items: ScheduleEntry[]; weekly: ScheduleEntry[]; people: Person[]; member: Viewer; timeZone: string; today: string;
 }) {
   const date = Formatters("USD");
   const days = Map.groupBy(items, (item) => item.starts_at.slice(0, 10));
@@ -191,19 +196,41 @@ function ScheduleBoard({ items, people, member, timeZone, today }: {
         <label>End time<input name="endTime" type="time" required /></label>
         <label>End date (only for overnight)<input name="endDate" type="date" /></label>
         <label>Note<input name="note" maxLength={100} placeholder="Optional" /></label>
+        <fieldset className="repeat-days">
+          <legend>Repeat weekly on</legend>
+          <p>Leave all days unchecked for a one-time entry.</p>
+          <div>
+            {weekdays.map(({ id, label }) => <label key={id}>
+              <input type="checkbox" name="repeatDay" value={id} /> {label}
+            </label>)}
+          </div>
+        </fieldset>
       </QuickForm>
     </div>
+    {weekly.length > 0 && <section className="lane weekly-schedule">
+      <div className="lane-heading"><span className="lane-icon maintain"><CalendarDays size={18} /></span><h3>Weekly schedules</h3></div>
+      <ul className="items">{weekly.map((entry) => <li className="item schedule-item" key={entry.id}>
+        <div className="item-title"><strong>{memberName(people, entry.member_id)}{entry.note && ` · ${entry.note}`}</strong>
+          <span className={`tag ${entry.status === "home" ? "maintain" : "buy"}`}>{entry.status === "home" ? "Home" : "Away"}</span>
+        </div>
+        <p className="item-meta">{weekdays.filter(({ id }) => entry.repeat_on?.includes(id)).map(({ label }) => label).join(", ")} · {date.time(entry.starts_at)} – {date.time(entry.ends_at)}
+          {entry.ends_at.slice(0, 10) !== entry.starts_at.slice(0, 10) && " next day"}
+        </p>
+        {entry.starts_at.slice(0, 10) > today && <p className="item-meta">Starts {date.date(entry.starts_at)}</p>}
+        {entry.member_id === member.id && <div className="item-actions"><ItemAction id={entry.id} intent="schedule-delete" label="Stop repeating" variant="danger" /></div>}
+      </li>)}</ul>
+    </section>}
     {!days.size && <p className="empty schedule-empty">No upcoming schedules. Add when you’ll be home or away.</p>}
     <div className="schedule-days">
       {[...days].map(([day, entries]) => <section className="lane schedule-day" key={day}>
         <div className="lane-heading"><span className="lane-icon maintain"><CalendarDays size={18} /></span><h3>{date.date(day)}</h3></div>
-        <ul className="items">{entries.map((entry) => <li className="item schedule-item" key={entry.id}>
+        <ul className="items">{entries.map((entry) => <li className="item schedule-item" key={`${entry.id}-${entry.starts_at}`}>
           <div className="item-title"><strong>{memberName(people, entry.member_id)}</strong>
             <span className={`tag ${entry.status === "home" ? "maintain" : "buy"}`}>{entry.status === "home" ? "Home" : "Away"}</span>
           </div>
           <p className="item-meta"><Clock3 size={15} />{date.time(entry.starts_at)} – {entry.ends_at.slice(0, 10) !== day && `${date.date(entry.ends_at)}, `}{date.time(entry.ends_at)}</p>
           {entry.note && <p className="item-meta">{entry.note}</p>}
-          {entry.member_id === member.id && <div className="item-actions"><ItemAction id={entry.id} intent="schedule-delete" label="Remove" variant="danger" /></div>}
+          {!entry.repeat_on?.length && entry.member_id === member.id && <div className="item-actions"><ItemAction id={entry.id} intent="schedule-delete" label="Remove" variant="danger" /></div>}
         </li>)}</ul>
       </section>)}
     </div>
@@ -256,7 +283,7 @@ export function Board({ section, data, member, people, currency, timeZone, date,
         </div>
         {section === "groceries" && <GroceryBoard items={data.groceries} member={member} people={people} />}
         {section === "chores" && <ChoreBoard items={data.chores} member={member} people={people} currency={currency} />}
-        {section === "schedule" && <ScheduleBoard items={data.schedule} member={member} people={people} timeZone={timeZone} today={date} />}
+        {section === "schedule" && <ScheduleBoard items={data.schedule} weekly={data.weeklySchedule} member={member} people={people} timeZone={timeZone} today={date} />}
       </div>
     </main>
   </div>;

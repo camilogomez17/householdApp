@@ -27,6 +27,7 @@ export type ScheduleEntry = {
   starts_at: string;
   ends_at: string;
   note: string;
+  repeat_on?: number[];
 };
 
 export type BoardData = { groceries: Grocery[]; chores: Chore[]; schedule: ScheduleEntry[] };
@@ -40,11 +41,32 @@ export function householdDate(timeZone: string, at = new Date()) {
   return new Intl.DateTimeFormat("en-CA", { timeZone, year: "numeric", month: "2-digit", day: "2-digit" }).format(at);
 }
 
+export function shiftDate(date: string, days: number) {
+  const value = new Date(`${date}T12:00:00Z`);
+  value.setUTCDate(value.getUTCDate() + days);
+  return value.toISOString().slice(0, 10);
+}
+
+function upcomingSchedule(entries: ScheduleEntry[], today: string) {
+  // Include yesterday's starts so overnight occurrences ending today appear.
+  const dates = Array.from({ length: 15 }, (_, index) => shiftDate(today, index - 1));
+  return entries.flatMap((entry) => {
+    if (!entry.repeat_on?.length) return entry.ends_at.slice(0, 10) >= today ? [entry] : [];
+    const firstDay = entry.starts_at.slice(0, 10);
+    const overnight = entry.ends_at.slice(0, 10) > firstDay;
+    return dates.flatMap((day) => {
+      const weekday = new Date(`${day}T12:00:00Z`).getUTCDay();
+      if (day < firstDay || !entry.repeat_on?.includes(weekday)) return [];
+      const end = overnight ? shiftDate(day, 1) : day;
+      if (end < today) return [];
+      return [{ ...entry, starts_at: day + entry.starts_at.slice(10), ends_at: end + entry.ends_at.slice(10) }];
+    });
+  }).sort((a, b) => a.starts_at.localeCompare(b.starts_at));
+}
+
 function demoBoard(timeZone: string): BoardData {
   const today = householdDate(timeZone);
-  const tomorrow = new Date(`${today}T12:00:00Z`);
-  tomorrow.setUTCDate(tomorrow.getUTCDate() + 1);
-  const nextDay = tomorrow.toISOString().slice(0, 10);
+  const nextDay = shiftDate(today, 1);
   return {
     groceries: [
       { id: randomUUID(), name: "Oat milk", quantity: "2 cartons", status: "buy", claimed_by: null },
@@ -107,8 +129,8 @@ export async function loadBoard(timeZone: string) {
   return {
     groceries: board.groceries,
     chores: [...board.chores].sort((a, b) => (a.due_on ?? "9999").localeCompare(b.due_on ?? "9999")),
-    schedule: board.schedule.filter((entry) => entry.ends_at.slice(0, 10) >= householdDate(timeZone))
-      .sort((a, b) => a.starts_at.localeCompare(b.starts_at)),
+    schedule: upcomingSchedule(board.schedule, householdDate(timeZone)),
+    weeklySchedule: board.schedule.filter((entry) => entry.repeat_on?.length),
   };
 }
 
