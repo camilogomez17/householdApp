@@ -176,8 +176,8 @@ function ChoreBoard({ items, member, people, currency }: { items: Chore[]; membe
   </>;
 }
 
-function ScheduleBoard({ items, people, member, timeZone }: {
-  items: ScheduleEntry[]; people: Person[]; member: Viewer; timeZone: string;
+function ScheduleBoard({ items, people, member, timeZone, today }: {
+  items: ScheduleEntry[]; people: Person[]; member: Viewer; timeZone: string; today: string;
 }) {
   const date = Formatters("USD");
   const days = Map.groupBy(items, (item) => item.starts_at.slice(0, 10));
@@ -186,8 +186,10 @@ function ScheduleBoard({ items, people, member, timeZone }: {
       <div><h2>Home and away</h2><p>Schedule times use {timeZone.replaceAll("_", " ")}.</p></div>
       <QuickForm intent="schedule-add" title="Add schedule">
         <label>Availability<select name="status"><option value="home">Home</option><option value="away">Away</option></select></label>
-        <label>Starts<input name="starts" type="datetime-local" required /></label>
-        <label>Ends<input name="ends" type="datetime-local" required /></label>
+        <label>Date<input name="startDate" type="date" defaultValue={today} required /></label>
+        <label>Start time<input name="startTime" type="time" required /></label>
+        <label>End time<input name="endTime" type="time" required /></label>
+        <label>End date (only for overnight)<input name="endDate" type="date" /></label>
         <label>Note<input name="note" maxLength={100} placeholder="Optional" /></label>
       </QuickForm>
     </div>
@@ -254,7 +256,7 @@ export function Board({ section, data, member, people, currency, timeZone, date,
         </div>
         {section === "groceries" && <GroceryBoard items={data.groceries} member={member} people={people} />}
         {section === "chores" && <ChoreBoard items={data.chores} member={member} people={people} currency={currency} />}
-        {section === "schedule" && <ScheduleBoard items={data.schedule} member={member} people={people} timeZone={timeZone} />}
+        {section === "schedule" && <ScheduleBoard items={data.schedule} member={member} people={people} timeZone={timeZone} today={date} />}
       </div>
     </main>
   </div>;

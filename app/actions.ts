@@ -36,8 +36,11 @@ const groceryStatus = z.enum(["buy", "maintain", "remove"]);
 const assignee = z.string().max(32);
 const taskAmount = z.string().regex(/^(?:\d{1,5}(?:\.\d{1,2})?)?$/)
   .transform((value) => Math.round(Number(value) * 100)).pipe(z.number().max(1000000));
-const dateTime = z.iso.datetime({ local: true, precision: -1 })
-  .refine((value) => /^20\d\d-\d\d-\d\dT\d\d:\d\d$/.test(value));
+const scheduleDate = z.iso.date().refine((value) => value.startsWith("20"));
+const scheduleTime = z.iso.time().transform((value) => value.slice(0, 5));
+const dateTime = z.iso.datetime({ local: true })
+  .refine((value) => /^20\d\d-\d\d-\d\dT[\d:.]+$/.test(value))
+  .transform((value) => value.slice(0, 16));
 const task = z.discriminatedUnion("intent", [
   z.object({ intent: z.literal("grocery-add"), name, quantity: z.string().trim().max(40), status: groceryStatus }),
   z.object({ intent: z.literal("grocery-edit"), id, quantity: z.string().trim().max(40), status: groceryStatus }),
@@ -54,8 +57,22 @@ export async function updateBoard(_: FormResult, form: FormData): Promise<FormRe
   const config = getConfig();
   if (!member || !config) return { error: "Sign in again to update the board." };
 
-  const parsed = task.safeParse(Object.fromEntries(form));
-  if (!parsed.success) return { error: "Check the fields and try again." };
+  const fields = Object.fromEntries(form);
+  if (fields.intent === "schedule-add" && "startDate" in fields) {
+    const start = scheduleDate.safeParse(fields.startDate);
+    const end = scheduleDate.safeParse(fields.endDate || fields.startDate);
+    const startTime = scheduleTime.safeParse(fields.startTime);
+    const endTime = scheduleTime.safeParse(fields.endTime);
+    if (!start.success || !end.success) return { error: "Enter a valid date for the schedule." };
+    if (!startTime.success || !endTime.success) return { error: "Enter both a start time and an end time." };
+    fields.starts = `${start.data}T${startTime.data}`;
+    fields.ends = `${end.data}T${endTime.data}`;
+  }
+
+  const parsed = task.safeParse(fields);
+  if (!parsed.success) return { error: fields.intent === "schedule-add"
+    ? "Check the date, both times, and the note (100 characters maximum)."
+    : "Check the fields and try again." };
 
   const input = parsed.data;
   const canAssign = (assigneeId: string) =>
@@ -124,7 +141,10 @@ export async function updateBoard(_: FormResult, form: FormData): Promise<FormRe
           board.chores = board.chores.filter((item) => item.id !== input.id);
           break;
         case "schedule-add":
-          if (input.ends <= input.starts) return "End time must be after start time.";
+          if (input.ends <= input.starts) return "End time must be after the start. If it ends overnight, choose the next day as the end date.";
+          if (input.ends.slice(0, 10) < householdDate(config.timeZone)) {
+            return "This entry ends before today. Choose today or a future date.";
+          }
           board.schedule.push({ id: randomUUID(), member_id: member.id,
             status: input.status, starts_at: input.starts, ends_at: input.ends, note: input.note });
           break;
