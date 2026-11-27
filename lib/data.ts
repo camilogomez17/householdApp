@@ -86,11 +86,20 @@ async function readDemo(timeZone: string) {
 }
 
 async function readProduction() {
-  const result = await get(pathname, { access: "private", useCache: false });
+  const result = await get(pathname, {
+    access: "private",
+    useCache: false,
+    headers: { "Accept-Encoding": "identity" },
+    abortSignal: AbortSignal.timeout(10_000),
+  });
   if (!result) return { board: { groceries: [], chores: [], schedule: [] } as BoardData };
   if (result.statusCode !== 200) throw new Error("Unexpected Blob response.");
   const board = await new Response(result.stream).json() as BoardData;
-  return { board, etag: result.blob.etag };
+  // Blob's CDN can prefix the stored ETag with W/ for compressed GETs.
+  // Its conditional write endpoint expects the original strong tag.
+  const etag = result.blob.etag.replace(/^W\//, "");
+  if (!etag) throw new Error("Missing Blob version.");
+  return { board, etag };
 }
 
 export async function loadBoard(timeZone: string) {
