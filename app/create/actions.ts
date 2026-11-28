@@ -3,7 +3,9 @@ import { z } from "zod";
 import { createHousehold } from "../../lib/households";
 import { getConfig, demoMode } from "../../lib/config";
 import { setSession } from "../../lib/session";
-export async function register(_: { error?: string; code?: string }, form: FormData) {
+type RegistrationState = { error?: string; code?: string };
+
+export async function register(_: RegistrationState, form: FormData): Promise<RegistrationState> {
   const config = getConfig();
   if (!config || demoMode) return { error: "Registration unavailable." };
   const schema = z.string().trim().min(1).max(40);
